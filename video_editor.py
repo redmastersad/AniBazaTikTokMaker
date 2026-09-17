@@ -105,8 +105,8 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
     # 4. Logo Overlay (if provided)
     if logo_path and os.path.exists(logo_path):
         logo = ffmpeg.input(logo_path)
-        # Scale logo if it's too big (e.g. max width 400), keep aspect ratio
-        logo = logo.filter('scale', 'min(400,iw)', '-1')
+        # Scale logo if it's too big (e.g. max width 700), keep aspect ratio
+        logo = logo.filter('scale', 'min(700,iw)', '-1')
         # Overlay at the top center, y=80 for some padding
         video = ffmpeg.overlay(video, logo, x='(main_w-overlay_w)/2', y='80')
         
