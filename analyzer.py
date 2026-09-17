@@ -50,8 +50,10 @@ You are an expert anime editor for TikTok and YouTube Shorts.
 Your goal is to find the most epic, dramatic, action-packed, or highly emotional scenes from the following anime episode transcript.
 The transcript contains timestamp markers (e.g., [10.5s]).
 Find between 3 and 6 distinct highlights. It is very important that you find at least 3!
-Each highlight must be between 25 and 60 seconds long. DO NOT select short boring clips. Focus ONLY on the climax, fights, or big reveals!
-You MUST ONLY return the exact moments present in the text, using the provided timestamps. Do not invent new timestamps.
+STRICT RULES FOR HIGHLIGHTS:
+1. Each highlight MUST be between 20 and 60 seconds long. NEVER exceed 60 seconds! TikToks must be short!
+2. Do not select short boring clips. Focus ONLY on the climax, fights, or big reveals.
+3. You MUST ONLY return the exact moments present in the text, using the provided timestamps. Do not invent new timestamps.
 
 Return ONLY a valid JSON object without any markdown wrapping. It must exactly match this format:
 {{
@@ -113,6 +115,14 @@ Transcript:
             start_t = float(h.get("start_time", 0))
             end_t = float(h.get("end_time", 0))
             if start_t > 0 and end_t > start_t:
+                # Строгий лимит: максимум 60 секунд на ролик
+                if end_t - start_t > 60.0:
+                    end_t = start_t + 60.0
+                
+                # Защита от микро-роликов
+                if end_t - start_t < 15.0:
+                    continue
+                    
                 result.append({
                     "title": h.get("title", "Highlight"),
                     "start": start_t,
