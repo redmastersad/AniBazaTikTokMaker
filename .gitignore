@@ -1,0 +1,17 @@
+# Environments
+venv/
+env/
+.env
+
+# Cache
+__pycache__/
+*.pyc
+
+# Project specific
+output/
+bot_temp/
+bot_sessions/
+
+# OS specific
+.DS_Store
+Thumbs.db
