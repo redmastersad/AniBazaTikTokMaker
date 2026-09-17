@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 import time
+import queue
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from playwright.sync_api import sync_playwright
@@ -66,6 +67,9 @@ class YouTubeUploaderApp(ctk.CTk):
         self.status_label = ctk.CTkLabel(self, text="Ожидание действий...")
         self.status_label.grid(row=4, column=0, padx=20, pady=5)
 
+        self.upload_btn = ctk.CTkButton(self, text="Запустить робота-загрузчика 🚀", command=self.start_upload, height=40)
+        self.upload_btn.grid(row=5, column=0, padx=20, pady=20, sticky="ew")
+
         self.upload_queue = queue.Queue()
         # Запускаем фонового воркера для очереди
         threading.Thread(target=self.queue_worker, daemon=True).start()
@@ -75,6 +79,10 @@ class YouTubeUploaderApp(ctk.CTk):
             with open("channel_name.txt", "r", encoding="utf-8") as f:
                 channel = f.read().strip()
             self.auth_status_label.configure(text=f"Аккаунт: {channel} ✅")
+
+    def open_login_browser(self):
+        self.auth_btn.configure(state="disabled", text="Браузер открыт...")
+        threading.Thread(target=self._login_thread, daemon=True).start()
 
     def _login_thread(self):
         try:
@@ -160,7 +168,7 @@ class YouTubeUploaderApp(ctk.CTk):
             with sync_playwright() as p:
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
-                    headless=False,
+                    headless=True,
                     channel="chrome",
                     args=["--disable-blink-features=AutomationControlled"]
                 )
