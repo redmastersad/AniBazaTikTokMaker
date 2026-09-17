@@ -69,13 +69,20 @@ class YouTubeUploaderApp(ctk.CTk):
         self.upload_btn = ctk.CTkButton(self, text="Запустить робота-загрузчика 🚀", command=self.start_upload, height=40)
         self.upload_btn.grid(row=5, column=0, padx=20, pady=20, sticky="ew")
 
+    def check_auth(self):
+        if os.path.exists("channel_name.txt"):
+            with open("channel_name.txt", "r", encoding="utf-8") as f:
+                channel = f.read().strip()
+            self.auth_status_label.configure(text=f"Аккаунт: {channel} ✅")
+
     def open_login_browser(self):
         self.auth_btn.configure(state="disabled", text="Браузер открыт...")
         threading.Thread(target=self._login_thread, daemon=True).start()
 
     def _login_thread(self):
         try:
-            self.status_label.configure(text="Войдите в аккаунт и ЗАКРОЙТЕ браузер вручную...")
+            self.status_label.configure(text="Войдите в аккаунт в открывшемся браузере...")
+            print("[Логин] Запуск браузера для авторизации...")
             with sync_playwright() as p:
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
@@ -86,22 +93,28 @@ class YouTubeUploaderApp(ctk.CTk):
                 page = browser.pages[0]
                 page.goto("https://studio.youtube.com/")
                 
-                # Просто ждем пока пользователь сам закроет окно
-                try:
-                    page.wait_for_event("close", timeout=0)
-                except:
-                    pass
-                try:
-                    browser.close()
-                except:
-                    pass
+                print("[Логин] Ожидание успешного входа (URL должен измениться)...")
+                # Ждем, пока URL станет дэшбордом канала
+                page.wait_for_url("**/studio.youtube.com/channel/**", timeout=0)
+                time.sleep(3) # Ждем прогрузки страницы
                 
-            self.status_label.configure(text="Авторизация сохранена! ✅")
+                # Пытаемся вытащить имя канала из заголовка страницы
+                title = page.title()
+                print(f"[Логин] Заголовок страницы: {title}")
+                channel_name = title.split(" - ")[1] if " - " in title else "Ваш Канал"
+                
+                with open("channel_name.txt", "w", encoding="utf-8") as f:
+                    f.write(channel_name)
+                    
+                browser.close()
+                print(f"[Логин] Успех! Канал: {channel_name}")
+                self.auth_status_label.configure(text=f"Аккаунт: {channel_name} ✅")
+                self.status_label.configure(text="Авторизация сохранена! ✅")
         except Exception as e:
-            print(f"Login error: {e}")
-            messagebox.showerror("Ошибка", f"Не удалось открыть Chrome. Убедитесь, что Google Chrome установлен!\n\nОшибка: {e}")
+            print(f"[Логин] Ошибка: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось авторизоваться:\n{e}")
         finally:
-            self.auth_btn.configure(state="normal", text="Войти в YouTube")
+            self.auth_btn.configure(state="normal", text="Войти в YouTube (Сменить)")
 
     def browse_file(self):
         filename = filedialog.askopenfilename(
@@ -123,79 +136,80 @@ class YouTubeUploaderApp(ctk.CTk):
             messagebox.showerror("Ошибка", "Название видео обязательно!")
             return
 
-        # Не блокируем кнопку, чтобы можно было сразу ставить следующее видео в очередь!
-        self.status_label.configure(text=f"Видео '{os.path.basename(video_path)}' добавлено в очередь! 🚀")
-        self.file_path_var.set("") # Очищаем поле для следующего видео
+        print(f"[Очередь] Добавлено видео: {video_path}")
+        self.status_label.configure(text=f"Видео добавлено в очередь! 🚀")
+        self.file_path_var.set("") 
         
         threading.Thread(target=self.upload_thread, args=(video_path, title, description), daemon=True).start()
 
     def upload_thread(self, video_path, title, description):
         filename = os.path.basename(video_path)
+        print(f"[{filename}] Запуск робота-загрузчика...")
         try:
             with sync_playwright() as p:
-                # Запускаем в скрытом режиме (headless=True), чтобы не мешать пользователю
+                # ВАЖНО: headless=False, иначе YouTube блокирует невидимых ботов и меняет интерфейс!
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
-                    headless=True,
+                    headless=False,
                     channel="chrome",
                     args=["--disable-blink-features=AutomationControlled"]
                 )
                 page = browser.pages[0]
+                
+                print(f"[{filename}] Открываем YouTube Studio...")
                 page.goto("https://studio.youtube.com/")
 
-                # Check if logged in
                 if "accounts.google.com" in page.url:
+                    print(f"[{filename}] Ошибка: слетела авторизация.")
                     messagebox.showerror("Ошибка", f"Робот не авторизован! Видео {filename} отменено.")
                     browser.close()
                     return
 
-                # Click Create -> Upload Video
+                print(f"[{filename}] Нажимаем кнопку 'Создать'...")
+                page.wait_for_selector("ytcp-button#create-icon", timeout=30000)
                 page.click("ytcp-button#create-icon")
                 page.click("tp-yt-paper-item#text-item-0")
 
-                # Set file
+                print(f"[{filename}] Загружаем файл...")
                 page.set_input_files("input[type='file']", video_path)
                 
-                # Wait for upload dialog to load fully
+                print(f"[{filename}] Ждем окно ввода текста...")
                 page.wait_for_selector("div#title-textarea", timeout=20000)
                 time.sleep(2)
 
-                # Enter Title
+                print(f"[{filename}] Пишем название...")
                 page.fill("div#title-textarea #textbox", title)
                 
-                # Enter Description
+                print(f"[{filename}] Пишем описание...")
                 page.fill("div#description-textarea #textbox", description)
 
-                # Click "No, it's not made for kids"
+                print(f"[{filename}] Ставим галочку 'Не для детей'...")
                 page.click("tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']")
 
-                # Next (Details -> Video Elements)
+                print(f"[{filename}] Прокликиваем 'Далее'...")
                 page.click("ytcp-button#next-button")
                 time.sleep(1)
-                
-                # Next (Video Elements -> Checks)
                 page.click("ytcp-button#next-button")
                 time.sleep(1)
-                
-                # Next (Checks -> Visibility)
                 page.click("ytcp-button#next-button")
                 time.sleep(1)
 
-                # Select Public
+                print(f"[{filename}] Ставим публичный доступ и публикуем...")
                 page.click("tp-yt-paper-radio-button[name='PUBLIC']")
-                
-                # Click Publish
                 page.click("ytcp-button#done-button")
 
-                # Wait for the confirmation dialog
+                print(f"[{filename}] Ждем завершения...")
                 page.wait_for_selector("ytcp-video-share-dialog", timeout=60000)
                 browser.close()
 
-            messagebox.showinfo("Успех", f"Видео '{filename}' успешно опубликовано в фоновом режиме! ✅")
+            print(f"[{filename}] УСПЕХ! Видео опубликовано.")
+            messagebox.showinfo("Успех", f"Видео '{filename}' успешно опубликовано! ✅")
             
         except Exception as e:
+            print(f"[{filename}] ПРОИЗОШЛА ОШИБКА: {e}")
             messagebox.showerror("Ошибка загрузки", f"Видео '{filename}' не загрузилось:\n{e}")
 
 if __name__ == "__main__":
     app = YouTubeUploaderApp()
+    app.check_auth() # Проверяем при запуске
     app.mainloop()
