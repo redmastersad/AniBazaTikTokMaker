@@ -100,13 +100,14 @@ class YouTubeUploaderApp(ctk.CTk):
                 
                 print("[Логин] Ожидание дэшборда канала...")
                 page.wait_for_url("**/studio.youtube.com/channel/**", timeout=0)
-                time.sleep(3) 
                 
+                print("[Логин] Ожидание загрузки элементов страницы...")
                 try:
-                    # Пытаемся вытащить имя канала из текста под аватаркой
-                    channel_name = page.locator("#channel-name, ytcp-channel-name-text").first.inner_text().strip()
-                except:
-                    channel_name = "Ваш Канал"
+                    page.wait_for_selector("#channel-name", timeout=15000)
+                    channel_name = page.locator("#channel-name").first.inner_text().strip()
+                except Exception as e:
+                    print(f"[Логин] Не удалось спарсить имя канала: {e}")
+                    channel_name = "Успешная авторизация"
                 
                 with open("channel_name.txt", "w", encoding="utf-8") as f:
                     f.write(channel_name)
@@ -145,7 +146,6 @@ class YouTubeUploaderApp(ctk.CTk):
         self.status_label.configure(text=f"Видео добавлено в очередь! (Всего в очереди: {self.upload_queue.qsize() + 1}) 🚀")
         self.file_path_var.set("") 
         
-        # Кладем задачу в очередь вместо прямого запуска потока
         self.upload_queue.put({
             'video_path': video_path,
             'title': title,
@@ -166,63 +166,68 @@ class YouTubeUploaderApp(ctk.CTk):
         self.status_label.configure(text=f"Загрузка '{filename}'...")
         try:
             with sync_playwright() as p:
+                # Используем новый headless режим Chrome, который не палится ютубом
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
-                    headless=True,
+                    headless=False,
                     channel="chrome",
-                    args=["--disable-blink-features=AutomationControlled"]
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--headless=new",
+                        "--window-size=1920,1080",
+                        "--mute-audio"
+                    ]
                 )
                 page = browser.pages[0]
                 
                 print(f"[{filename}] Открываем YouTube Studio...")
                 page.goto("https://studio.youtube.com/")
 
-                if "accounts.google.com" in page.url:
-                    print(f"[{filename}] Ошибка: слетела авторизация.")
-                    messagebox.showerror("Ошибка", f"Слетела авторизация! Видео {filename} отменено.")
-                    browser.close()
-                    return
+                print(f"[{filename}] Ожидание загрузки интерфейса...")
+                page.wait_for_url("**/studio.youtube.com/channel/**", timeout=30000)
 
-                print(f"[{filename}] Нажимаем кнопку 'Создать'...")
-                # Более надежные селекторы, которые ищут любую кнопку создания
-                page.locator("#create-icon, a#upload-icon").first.click()
-                time.sleep(1)
-                page.locator("#text-item-0").click()
+                print(f"[{filename}] Нажимаем кнопку 'Создать' (#create-icon)...")
+                page.wait_for_selector("#create-icon", state="visible", timeout=30000)
+                page.click("#create-icon")
+                
+                print(f"[{filename}] Выбираем 'Добавить видео' (#text-item-0)...")
+                page.wait_for_selector("tp-yt-paper-item#text-item-0", state="visible", timeout=15000)
+                page.click("tp-yt-paper-item#text-item-0")
 
                 print(f"[{filename}] Загружаем файл...")
+                page.wait_for_selector("input[type='file']", state="attached", timeout=15000)
                 page.set_input_files("input[type='file']", video_path)
                 
                 print(f"[{filename}] Ждем окно ввода текста...")
-                page.wait_for_selector("div#title-textarea", timeout=30000)
+                page.wait_for_selector("div#title-textarea", state="visible", timeout=30000)
                 time.sleep(3)
 
                 print(f"[{filename}] Пишем название...")
-                # Полностью очищаем поле перед вводом
                 page.locator("div#title-textarea #textbox").first.fill("")
-                page.locator("div#title-textarea #textbox").first.type(title)
+                page.locator("div#title-textarea #textbox").first.type(title, delay=10)
                 
                 print(f"[{filename}] Пишем описание...")
                 page.locator("div#description-textarea #textbox").first.fill("")
-                page.locator("div#description-textarea #textbox").first.type(description)
+                page.locator("div#description-textarea #textbox").first.type(description, delay=10)
 
                 print(f"[{filename}] Ставим галочку 'Не для детей'...")
                 page.locator("tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']").first.click()
 
                 print(f"[{filename}] Прокликиваем 'Далее'...")
                 page.locator("#next-button").first.click()
-                time.sleep(1.5)
+                time.sleep(2)
                 page.locator("#next-button").first.click()
-                time.sleep(1.5)
+                time.sleep(2)
                 page.locator("#next-button").first.click()
-                time.sleep(1.5)
+                time.sleep(2)
 
                 print(f"[{filename}] Ставим публичный доступ и публикуем...")
                 page.locator("tp-yt-paper-radio-button[name='PUBLIC']").first.click()
+                time.sleep(1)
                 page.locator("#done-button").first.click()
 
-                print(f"[{filename}] Ждем завершения...")
-                page.wait_for_selector("ytcp-video-share-dialog", timeout=90000)
-                time.sleep(2)
+                print(f"[{filename}] Ждем окно успешной публикации...")
+                page.wait_for_selector("ytcp-video-share-dialog", state="visible", timeout=120000)
                 browser.close()
 
             print(f"[{filename}] УСПЕХ! Видео опубликовано.")
