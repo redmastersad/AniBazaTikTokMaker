@@ -85,10 +85,10 @@ class YouTubeUploaderApp(ctk.CTk):
                 page = browser.pages[0]
                 page.goto("https://studio.youtube.com/")
                 
-                # Wait until the user closes the browser manually
-                messagebox.showinfo("Авторизация", "Пожалуйста, войдите в свой аккаунт YouTube в открывшемся браузере.\n\nКогда зайдете в YouTube Studio, просто закройте браузер вручную.")
+                # Ждем, пока пользователь залогинится (URL сменится на дэшборд канала)
+                page.wait_for_url("**/studio.youtube.com/channel/**", timeout=0)
+                time.sleep(2) # Даем пару секунд на сохранение куки
                 
-                page.wait_for_event("close", timeout=0)
                 browser.close()
                 
             self.status_label.configure(text="Авторизация сохранена! ✅")
