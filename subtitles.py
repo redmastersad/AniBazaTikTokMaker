@@ -28,21 +28,20 @@ WrapStyle: 1
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: TikTokStyle,Segoe UI Black,110,&H00FFFFFF,&H0000FF00,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,10,0,2,10,10,50,1
+Style: TikTokStyle,Montserrat Black,110,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2,5,2,10,10,150,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
-    def format_time(seconds):
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = seconds % 60
-        cs = int((s - int(s)) * 100) # Centiseconds
+    def format_time(t):
+        if t < 0: t = 0
+        h = int(t / 3600)
+        m = int((t % 3600) / 60)
+        s = t % 60
+        cs = int((s - int(s)) * 100)
         return f"{h}:{m:02d}:{int(s):02d}.{cs:02d}"
 
-    # Group words into chunks of max 3 words
-    chunks = []
     phrases = []
     phrase = []
     
@@ -58,29 +57,37 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             
         phrase.append(w)
         
-        # Break phrase if it gets too long or hits punctuation
-        if len(phrase) >= 5 or w['word'].endswith(('.', '!', '?')):
+        # Break phrase if it gets too long (max 3 words) or hits punctuation
+        if len(phrase) >= 3 or w['word'].endswith(('.', '!', '?')):
             phrases.append(phrase)
             phrase = []
             
     if phrase:
         phrases.append(phrase)
 
+    # Generate ASS events word-by-word for the karaoke bounce effect
     for p in phrases:
-        current_chunk = []
-        for j, word in enumerate(p):
-            current_chunk.append(word)
-            if len(current_chunk) >= 3 or j == len(p) - 1:
-                chunks.append(current_chunk)
-                current_chunk = []
-
-    # Generate ASS events
-    for chunk in chunks:
-        chunk_start = format_time(chunk[0]['start'])
-        chunk_end = format_time(chunk[-1]['end'])
-        
-        text = " ".join([w['word'] for w in chunk]).strip()
-        ass_content += f"Dialogue: 0,{chunk_start},{chunk_end},TikTokStyle,,0,0,0,,{text}\n"
+        for i, target_word in enumerate(p):
+            w_start = format_time(target_word['start'])
+            
+            # Connect the end of this word to the start of the next word to prevent flickering within a phrase
+            if i < len(p) - 1:
+                w_end_time = min(target_word['end'] + 0.3, p[i+1]['start'])
+            else:
+                w_end_time = target_word['end']
+                
+            w_end = format_time(w_end_time)
+            
+            text_line = "{\\blur2}" # Soft shadow blur effect applied to the outline and shadow
+            for j, w in enumerate(p):
+                clean_word = w['word'].strip()
+                if j == i:
+                    # Active word: Yellow (#FFD700 -> &H0000D7FF&), Bounce from 90% to 100%
+                    text_line += f"{{\\c&H0000D7FF&\\fscx90\\fscy90\\t(0,100,\\fscx100\\fscy100)}}{clean_word}{{\\c&H00FFFFFF&\\fscx100\\fscy100}} "
+                else:
+                    text_line += f"{clean_word} "
+                    
+            ass_content += f"Dialogue: 0,{w_start},{w_end},TikTokStyle,,0,0,0,,{text_line.strip()}\n"
 
     with open(output_ass_path, 'w', encoding='utf-8') as f:
         f.write(ass_content)
