@@ -66,18 +66,15 @@ class YouTubeUploaderApp(ctk.CTk):
         self.status_label = ctk.CTkLabel(self, text="Ожидание действий...")
         self.status_label.grid(row=4, column=0, padx=20, pady=5)
 
-        self.upload_btn = ctk.CTkButton(self, text="Запустить робота-загрузчика 🚀", command=self.start_upload, height=40)
-        self.upload_btn.grid(row=5, column=0, padx=20, pady=20, sticky="ew")
+        self.upload_queue = queue.Queue()
+        # Запускаем фонового воркера для очереди
+        threading.Thread(target=self.queue_worker, daemon=True).start()
 
     def check_auth(self):
         if os.path.exists("channel_name.txt"):
             with open("channel_name.txt", "r", encoding="utf-8") as f:
                 channel = f.read().strip()
             self.auth_status_label.configure(text=f"Аккаунт: {channel} ✅")
-
-    def open_login_browser(self):
-        self.auth_btn.configure(state="disabled", text="Браузер открыт...")
-        threading.Thread(target=self._login_thread, daemon=True).start()
 
     def _login_thread(self):
         try:
@@ -93,15 +90,15 @@ class YouTubeUploaderApp(ctk.CTk):
                 page = browser.pages[0]
                 page.goto("https://studio.youtube.com/")
                 
-                print("[Логин] Ожидание успешного входа (URL должен измениться)...")
-                # Ждем, пока URL станет дэшбордом канала
+                print("[Логин] Ожидание дэшборда канала...")
                 page.wait_for_url("**/studio.youtube.com/channel/**", timeout=0)
-                time.sleep(3) # Ждем прогрузки страницы
+                time.sleep(3) 
                 
-                # Пытаемся вытащить имя канала из заголовка страницы
-                title = page.title()
-                print(f"[Логин] Заголовок страницы: {title}")
-                channel_name = title.split(" - ")[1] if " - " in title else "Ваш Канал"
+                try:
+                    # Пытаемся вытащить имя канала из текста под аватаркой
+                    channel_name = page.locator("#channel-name, ytcp-channel-name-text").first.inner_text().strip()
+                except:
+                    channel_name = "Ваш Канал"
                 
                 with open("channel_name.txt", "w", encoding="utf-8") as f:
                     f.write(channel_name)
@@ -137,17 +134,30 @@ class YouTubeUploaderApp(ctk.CTk):
             return
 
         print(f"[Очередь] Добавлено видео: {video_path}")
-        self.status_label.configure(text=f"Видео добавлено в очередь! 🚀")
+        self.status_label.configure(text=f"Видео добавлено в очередь! (Всего в очереди: {self.upload_queue.qsize() + 1}) 🚀")
         self.file_path_var.set("") 
         
-        threading.Thread(target=self.upload_thread, args=(video_path, title, description), daemon=True).start()
+        # Кладем задачу в очередь вместо прямого запуска потока
+        self.upload_queue.put({
+            'video_path': video_path,
+            'title': title,
+            'description': description
+        })
 
-    def upload_thread(self, video_path, title, description):
+    def queue_worker(self):
+        while True:
+            task = self.upload_queue.get()
+            self.upload_video_task(task['video_path'], task['title'], task['description'])
+            self.upload_queue.task_done()
+            if self.upload_queue.empty():
+                self.status_label.configure(text="Все видео из очереди загружены! ✅")
+
+    def upload_video_task(self, video_path, title, description):
         filename = os.path.basename(video_path)
-        print(f"[{filename}] Запуск робота-загрузчика...")
+        print(f"[{filename}] Начинаем обработку...")
+        self.status_label.configure(text=f"Загрузка '{filename}'...")
         try:
             with sync_playwright() as p:
-                # ВАЖНО: headless=False, иначе YouTube блокирует невидимых ботов и меняет интерфейс!
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
                     headless=False,
@@ -161,55 +171,62 @@ class YouTubeUploaderApp(ctk.CTk):
 
                 if "accounts.google.com" in page.url:
                     print(f"[{filename}] Ошибка: слетела авторизация.")
-                    messagebox.showerror("Ошибка", f"Робот не авторизован! Видео {filename} отменено.")
+                    messagebox.showerror("Ошибка", f"Слетела авторизация! Видео {filename} отменено.")
                     browser.close()
                     return
 
                 print(f"[{filename}] Нажимаем кнопку 'Создать'...")
-                page.wait_for_selector("ytcp-button#create-icon", timeout=30000)
-                page.click("ytcp-button#create-icon")
-                page.click("tp-yt-paper-item#text-item-0")
+                # Более надежные селекторы, которые ищут любую кнопку создания
+                page.locator("#create-icon, a#upload-icon").first.click()
+                time.sleep(1)
+                page.locator("#text-item-0").click()
 
                 print(f"[{filename}] Загружаем файл...")
                 page.set_input_files("input[type='file']", video_path)
                 
                 print(f"[{filename}] Ждем окно ввода текста...")
-                page.wait_for_selector("div#title-textarea", timeout=20000)
-                time.sleep(2)
+                page.wait_for_selector("div#title-textarea", timeout=30000)
+                time.sleep(3)
 
                 print(f"[{filename}] Пишем название...")
-                page.fill("div#title-textarea #textbox", title)
+                # Полностью очищаем поле перед вводом
+                page.locator("div#title-textarea #textbox").first.fill("")
+                page.locator("div#title-textarea #textbox").first.type(title)
                 
                 print(f"[{filename}] Пишем описание...")
-                page.fill("div#description-textarea #textbox", description)
+                page.locator("div#description-textarea #textbox").first.fill("")
+                page.locator("div#description-textarea #textbox").first.type(description)
 
                 print(f"[{filename}] Ставим галочку 'Не для детей'...")
-                page.click("tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']")
+                page.locator("tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']").first.click()
 
                 print(f"[{filename}] Прокликиваем 'Далее'...")
-                page.click("ytcp-button#next-button")
-                time.sleep(1)
-                page.click("ytcp-button#next-button")
-                time.sleep(1)
-                page.click("ytcp-button#next-button")
-                time.sleep(1)
+                page.locator("#next-button").first.click()
+                time.sleep(1.5)
+                page.locator("#next-button").first.click()
+                time.sleep(1.5)
+                page.locator("#next-button").first.click()
+                time.sleep(1.5)
 
                 print(f"[{filename}] Ставим публичный доступ и публикуем...")
-                page.click("tp-yt-paper-radio-button[name='PUBLIC']")
-                page.click("ytcp-button#done-button")
+                page.locator("tp-yt-paper-radio-button[name='PUBLIC']").first.click()
+                page.locator("#done-button").first.click()
 
                 print(f"[{filename}] Ждем завершения...")
-                page.wait_for_selector("ytcp-video-share-dialog", timeout=60000)
+                page.wait_for_selector("ytcp-video-share-dialog", timeout=90000)
+                time.sleep(2)
                 browser.close()
 
             print(f"[{filename}] УСПЕХ! Видео опубликовано.")
-            messagebox.showinfo("Успех", f"Видео '{filename}' успешно опубликовано! ✅")
             
         except Exception as e:
             print(f"[{filename}] ПРОИЗОШЛА ОШИБКА: {e}")
-            messagebox.showerror("Ошибка загрузки", f"Видео '{filename}' не загрузилось:\n{e}")
+            try:
+                browser.close()
+            except:
+                pass
 
 if __name__ == "__main__":
     app = YouTubeUploaderApp()
-    app.check_auth() # Проверяем при запуске
+    app.check_auth()
     app.mainloop()
