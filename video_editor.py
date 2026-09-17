@@ -81,12 +81,13 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
     
     stream = ffmpeg.input(video_path, ss=start_time, t=end_time - start_time)
     
-    # Anti-copyright & Polish: Mirror video, boost saturation, sharpen, and add film grain
+    # Anti-copyright & Polish: Mirror video, advanced color grading, vignette, sharpen, and film grain
     vid_stream = (
         stream.video
         .filter('hflip') # Зеркалим (спасает от авторских прав)
-        .filter('eq', saturation=1.2) # Делаем цвета чуть сочнее
+        .filter('eq', contrast=1.15, brightness=-0.02, saturation=1.3) # Глубокий контраст и супер-сочные цвета
         .filter('unsharp', 5, 5, 1.0, 5, 5, 0.0) # Легкая резкость
+        .filter('vignette') # Темные края (фокус на центр)
         .filter('noise', alls=15, allf='t+u') # Зернистость (Film Grain)
         .split() # Разделяем поток на два, иначе ffmpeg выдаст ошибку
     )
