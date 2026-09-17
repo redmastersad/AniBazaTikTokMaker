@@ -129,9 +129,25 @@ Transcript:
                     "end": end_t,
                     "explanation": h.get("explanation", "")
                 })
-                print(f"Found highlight: '{h.get('title')}' ({start_t}s - {end_t}s)")
+        
+        # Защита от дубликатов и пересекающихся моментов
+        result.sort(key=lambda x: x["start"])
+        filtered_result = []
+        
+        for h in result:
+            if not filtered_result:
+                filtered_result.append(h)
+                print(f"Found highlight: '{h['title']}' ({h['start']}s - {h['end']}s)")
+            else:
+                last_h = filtered_result[-1]
+                # Если новый момент начинается раньше, чем закончился старый (+ буфер 5 сек), пропускаем его
+                if h["start"] < last_h["end"] + 5.0:
+                    print(f"Skipping overlapping highlight: '{h['title']}'")
+                    continue
+                filtered_result.append(h)
+                print(f"Found highlight: '{h['title']}' ({h['start']}s - {h['end']}s)")
             
-        return result
+        return filtered_result
     except Exception as e:
         print(f"Failed to parse AI response: {e}")
         print("Raw response:", response.json().get("response"))

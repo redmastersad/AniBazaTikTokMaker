@@ -80,7 +80,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             
             text_line = "{\\blur2}" # Soft shadow blur effect applied to the outline and shadow
             for j, w in enumerate(p):
-                clean_word = w['word'].strip()
+                clean_word = w['word'].strip().upper()
                 if j == i:
                     # Active word: Yellow (#FFD700 -> &H0000D7FF&), Bounce from 90% to 100%
                     text_line += f"{{\\c&H0000D7FF&\\fscx90\\fscy90\\t(0,100,\\fscx100\\fscy100)}}{clean_word}{{\\c&H00FFFFFF&\\fscx100\\fscy100}} "
