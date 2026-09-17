@@ -78,7 +78,9 @@ class YouTubeUploaderApp(ctk.CTk):
             with sync_playwright() as p:
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
-                    headless=False
+                    headless=False,
+                    channel="chrome",
+                    args=["--disable-blink-features=AutomationControlled", "--start-maximized"]
                 )
                 page = browser.pages[0]
                 page.goto("https://studio.youtube.com/")
@@ -92,6 +94,7 @@ class YouTubeUploaderApp(ctk.CTk):
             self.status_label.configure(text="Авторизация сохранена! ✅")
         except Exception as e:
             print(f"Login error: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось открыть Chrome. Убедитесь, что Google Chrome установлен на вашем компьютере!\n\nОшибка: {e}")
         finally:
             self.auth_btn.configure(state="normal", text="Войти в YouTube")
 
@@ -127,7 +130,8 @@ class YouTubeUploaderApp(ctk.CTk):
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=USER_DATA_DIR,
                     headless=False,
-                    args=["--start-maximized"]
+                    channel="chrome",
+                    args=["--disable-blink-features=AutomationControlled", "--start-maximized"]
                 )
                 page = browser.pages[0]
                 page.goto("https://studio.youtube.com/")
