@@ -87,11 +87,12 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
         .filter('hflip') # Зеркалим (спасает от авторских прав)
         .filter('eq', saturation=1.2) # Делаем цвета чуть сочнее
         .filter('unsharp', 5, 5, 1.0, 5, 5, 0.0) # Легкая резкость
+        .split() # Разделяем поток на два, иначе ffmpeg выдаст ошибку
     )
     
     # 1. Background: Scale to cover the height, crop to target width, and heavily blur
     bg = (
-        vid_stream
+        vid_stream[0]
         .filter('scale', -1, target_h)
         .filter('crop', target_w, target_h)
         .filter('boxblur', 20, 5)
@@ -102,7 +103,7 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
     fg_h -= fg_h % 2 # Must be even
     
     fg = (
-        vid_stream
+        vid_stream[1]
         .filter('scale', -1, fg_h)
         .filter('crop', target_w, fg_h)
     )
