@@ -77,8 +77,8 @@ def format_video(video_path: str, output_path: str, subclips: list, logo_path: s
         
     # 5. Background Music (if provided)
     if music_path and os.path.exists(music_path):
-        # -8dB as requested, looped indefinitely to match video length
-        bg_music = ffmpeg.input(music_path, stream_loop=-1).audio.filter('volume', '-8dB')
+        # Lowered volume significantly as requested (approx -16dB / ~15% volume)
+        bg_music = ffmpeg.input(music_path, stream_loop=-1).audio.filter('volume', '-16dB')
         # Mix audio tracks. duration='first' ensures it stops when the main video audio stops.
         audio = ffmpeg.filter([audio, bg_music], 'amix', inputs=2, duration='first', dropout_transition=2)
     
