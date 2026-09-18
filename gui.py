@@ -17,6 +17,7 @@ class App(ctk.CTk):
         
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("dark-blue") # More beautiful theme
+        self.configure(fg_color="#1F4037")
 
         self.logos_dir = os.path.abspath(os.path.join("Assets", "Logo"))
         self.music_dir = os.path.abspath(os.path.join("Assets", "Music"))
@@ -46,10 +47,10 @@ class App(ctk.CTk):
         self.header_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
         self.header_frame.grid_columnconfigure(0, weight=1)
         
-        # Title
+        # Title (if logo is loaded, we hide the text to prevent overlap)
         self.title_label = ctk.CTkLabel(
             self.header_frame, 
-            text="AniBaza AI Generator" if not self.logo_img else " AniBaza AI Generator", 
+            text="AniBaza AI Generator" if not self.logo_img else "", 
             font=ctk.CTkFont(size=24, weight="bold"),
             image=self.logo_img,
             compound="left"
@@ -128,32 +129,32 @@ class App(ctk.CTk):
         self.run_btn.grid(row=7, column=0, padx=20, pady=10, sticky="ew")
         
         # Watermark
-        self.watermark_label = ctk.CTkLabel(self, text="🔥 EXCLUSIVELY DEVELOPED FOR ANIBAZA 🔥", text_color="gray", font=ctk.CTkFont(size=10, weight="bold"))
+        self.watermark_label = ctk.CTkLabel(self, text="EXCLUSIVELY DEVELOPED FOR ANIBAZA", text_color="gray", font=ctk.CTkFont(size=10, weight="bold"))
         self.watermark_label.grid(row=8, column=0, pady=(0, 10))
         
     def change_language(self, choice):
         if choice == "RU":
             self.title("Генератор AniBaza TikTok ИИ")
-            self.title_label.configure(text="Генератор AniBaza ИИ" if not self.logo_img else " Генератор AniBaza ИИ")
+            self.title_label.configure(text="Генератор AniBaza ИИ" if not self.logo_img else "")
             self.browse_btn.configure(text="Выбрать Видео")
             self.browse_out_btn.configure(text="Выбрать Папку")
             self.browse_logo_btn.configure(text="Выбрать Лого")
             self.browse_music_btn.configure(text="Выбрать Музыку")
             self.remove_silence_cb.configure(text="Обрезать сцены без диалогов (Jump Cuts)")
             self.run_btn.configure(text="Сгенерировать Видео")
-            self.watermark_label.configure(text="🔥 СОЗДАНО СПЕЦИАЛЬНО ДЛЯ ANIBAZA 🔥")
+            self.watermark_label.configure(text="СОЗДАНО СПЕЦИАЛЬНО ДЛЯ ANIBAZA")
             if "Ready" in self.status_label.cget("text"):
                 self.status_label.configure(text="Готово. Используется Llama 3.1 8B и Whisper GPU.")
         else:
             self.title("AniBaza TikTok AI Generator")
-            self.title_label.configure(text="AniBaza AI Generator" if not self.logo_img else " AniBaza AI Generator")
+            self.title_label.configure(text="AniBaza AI Generator" if not self.logo_img else "")
             self.browse_btn.configure(text="Select Video")
             self.browse_out_btn.configure(text="Select Output")
             self.browse_logo_btn.configure(text="Select Logo")
             self.browse_music_btn.configure(text="Select Music")
             self.remove_silence_cb.configure(text="Cut scenes without dialogues (Jump Cuts)")
             self.run_btn.configure(text="Generate Video")
-            self.watermark_label.configure(text="🔥 EXCLUSIVELY DEVELOPED FOR ANIBAZA 🔥")
+            self.watermark_label.configure(text="EXCLUSIVELY DEVELOPED FOR ANIBAZA")
             if "Готово" in self.status_label.cget("text"):
                 self.status_label.configure(text="Ready. Using Llama 3.1 8B and Whisper GPU.")
 

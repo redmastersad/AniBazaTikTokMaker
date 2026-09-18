@@ -47,7 +47,7 @@ def get_subclips(words_data: list, start_time: float, end_time: float, max_silen
 
 def process_video(video_path: str, output_dir: str, logo_path: str = None, music_path: str = None, remove_silence: bool = True):
     print("\n=======================================================")
-    print("      🔥 ANIBAZA TIKTOK AI VIDEO GENERATOR 🔥      ")
+    print("        ANIBAZA TIKTOK AI VIDEO GENERATOR        ")
     print("        Created exclusively for the AniBaza team       ")
     print("=======================================================\n")
     

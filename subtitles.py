@@ -34,7 +34,7 @@ def generate_ass_subtitles(words_data, output_ass_path, subclips):
     # ASS Header
     ass_content = """[Script Info]
 Title: AniBaza Auto Subtitles
-Original Script: 🔥 Created exclusively for AniBaza 🔥
+Original Script: Created exclusively for AniBaza
 ScriptType: v4.00+
 PlayResX: 1080
 PlayResY: 1920
