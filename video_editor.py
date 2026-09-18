@@ -85,9 +85,9 @@ def format_video(video_path: str, output_path: str, subclips: list, logo_path: s
         streams.append(s.audio)
         
     if len(subclips) > 1:
-        concatenated = ffmpeg.concat(*streams, v=1, a=1)
-        base_video = concatenated.video
-        audio = concatenated.audio
+        joined = ffmpeg.concat(*streams, v=1, a=1).node
+        base_video = joined[0]
+        audio = joined[1]
     else:
         base_video = streams[0]
         audio = streams[1]
