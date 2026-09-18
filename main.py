@@ -7,6 +7,18 @@ from analyzer import find_highlights
 from video_editor import format_video
 from subtitles import generate_ass_subtitles, burn_subtitles
 
+def get_next_video_number(output_dir: str) -> int:
+    max_num = 0
+    if os.path.exists(output_dir):
+        for f in os.listdir(output_dir):
+            if f.endswith(".mp4"):
+                name = os.path.splitext(f)[0]
+                if name.isdigit():
+                    num = int(name)
+                    if num > max_num:
+                        max_num = num
+    return max_num + 1
+
 def process_video(video_path: str, output_dir: str, logo_path: str = None):
     print("=== TikTok AI Video Generator ===")
     
@@ -25,15 +37,16 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None):
     os.makedirs(output_dir, exist_ok=True)
     generated_files = []
     
+    next_num = get_next_video_number(output_dir)
+    
     # 3. Process each highlight
     print("\n--- Step 3: Video Processing ---")
     for i, h in enumerate(highlights):
         print(f"\nProcessing highlight {i+1}: '{h['title']}'")
         
-        title_clean = "".join([c if c.isalnum() else "_" for c in h['title']])
         temp_cropped_path = os.path.join(output_dir, f"temp_cropped_{i}.mp4")
         ass_path = os.path.join(output_dir, f"subs_{i}.ass")
-        final_output_path = os.path.join(output_dir, f"tiktok_{i}_{title_clean}.mp4")
+        final_output_path = os.path.join(output_dir, f"{next_num}.mp4")
         
         # Crop and Format
         print(f"Formatting clip {i+1} / {len(highlights)} (Blur background, vertical layout)...")
@@ -51,7 +64,15 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None):
             except Exception as e:
                 print(f"Could not remove temp file: {e}")
                 
+        # Cleanup ASS file
+        if os.path.exists(ass_path):
+            try:
+                os.remove(ass_path)
+            except Exception as e:
+                print(f"Could not remove ASS file: {e}")
+                
         generated_files.append(final_output_path)
+        next_num += 1
 
             
     print("\n=== All Done! ===")
