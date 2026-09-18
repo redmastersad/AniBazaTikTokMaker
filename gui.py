@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox
 import threading
 import os
 import sys
+from PIL import Image
 
 # Import our processing function
 from main import process_video
@@ -15,12 +16,26 @@ class App(ctk.CTk):
         self.geometry("600x640")
         
         ctk.set_appearance_mode("System")
-        ctk.set_default_color_theme("blue")
+        ctk.set_default_color_theme("dark-blue") # More beautiful theme
 
         self.logos_dir = os.path.abspath(os.path.join("Assets", "Logo"))
         self.music_dir = os.path.abspath(os.path.join("Assets", "Music"))
         os.makedirs(self.logos_dir, exist_ok=True)
         os.makedirs(self.music_dir, exist_ok=True)
+
+        # Try to load the logo image
+        self.logo_img = None
+        png_files = [f for f in os.listdir(self.logos_dir) if f.lower().endswith('.png')]
+        if png_files:
+            try:
+                logo_path = os.path.join(self.logos_dir, png_files[0])
+                pil_image = Image.open(logo_path)
+                w, h = pil_image.size
+                ratio = 50.0 / h
+                new_w = int(w * ratio)
+                self.logo_img = ctk.CTkImage(light_image=pil_image, dark_image=pil_image, size=(new_w, 50))
+            except Exception as e:
+                print("Could not load logo image:", e)
 
         # Layout
         self.grid_columnconfigure(0, weight=1)
@@ -32,7 +47,13 @@ class App(ctk.CTk):
         self.header_frame.grid_columnconfigure(0, weight=1)
         
         # Title
-        self.title_label = ctk.CTkLabel(self.header_frame, text="AniBaza AI Generator", font=ctk.CTkFont(size=24, weight="bold"))
+        self.title_label = ctk.CTkLabel(
+            self.header_frame, 
+            text="AniBaza AI Generator" if not self.logo_img else " AniBaza AI Generator", 
+            font=ctk.CTkFont(size=24, weight="bold"),
+            image=self.logo_img,
+            compound="left"
+        )
         self.title_label.grid(row=0, column=0, sticky="w")
         
         # UI Language Switch
@@ -113,7 +134,7 @@ class App(ctk.CTk):
     def change_language(self, choice):
         if choice == "RU":
             self.title("Генератор AniBaza TikTok ИИ")
-            self.title_label.configure(text="Генератор AniBaza ИИ")
+            self.title_label.configure(text="Генератор AniBaza ИИ" if not self.logo_img else " Генератор AniBaza ИИ")
             self.browse_btn.configure(text="Выбрать Видео")
             self.browse_out_btn.configure(text="Выбрать Папку")
             self.browse_logo_btn.configure(text="Выбрать Лого")
@@ -125,7 +146,7 @@ class App(ctk.CTk):
                 self.status_label.configure(text="Готово. Используется Llama 3.1 8B и Whisper GPU.")
         else:
             self.title("AniBaza TikTok AI Generator")
-            self.title_label.configure(text="AniBaza AI Generator")
+            self.title_label.configure(text="AniBaza AI Generator" if not self.logo_img else " AniBaza AI Generator")
             self.browse_btn.configure(text="Select Video")
             self.browse_out_btn.configure(text="Select Output")
             self.browse_logo_btn.configure(text="Select Logo")
