@@ -84,12 +84,12 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
     # Anti-copyright & Polish: Mirror video, advanced color grading, vignette, sharpen, and film grain
     vid_stream = (
         stream.video
-        .filter('hflip') # Зеркалим (спасает от авторских прав)
-        .filter('eq', contrast=1.15, brightness=-0.02, saturation=1.3) # Глубокий контраст и супер-сочные цвета
-        .filter('unsharp', 5, 5, 1.0, 5, 5, 0.0) # Легкая резкость
-        .filter('vignette') # Темные края (фокус на центр)
-        .filter('noise', alls=15, allf='t+u') # Зернистость (Film Grain)
-        .split() # Разделяем поток на два, иначе ffmpeg выдаст ошибку
+        .filter('hflip') # Mirroring (avoids copyright issues)
+        .filter('eq', contrast=1.15, brightness=-0.02, saturation=1.3) # Deep contrast and saturated colors
+        .filter('unsharp', 5, 5, 1.0, 5, 5, 0.0) # Light sharpening
+        .filter('vignette') # Dark edges (focus on center)
+        .filter('noise', alls=15, allf='t+u') # Film grain
+        .split() # Split stream in two, otherwise ffmpeg will throw an error
     )
     
     # 1. Background: Scale to cover the height, crop to target width, and heavily blur

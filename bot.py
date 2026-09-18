@@ -3,7 +3,7 @@ import telebot
 from telebot.types import Message
 from main import process_video
 
-# Замените 'YOUR_BOT_TOKEN' на токен от BotFather
+# Replace 'YOUR_BOT_TOKEN' with the token from BotFather
 TOKEN = "YOUR_BOT_TOKEN"
 bot = telebot.TeleBot(TOKEN)
 
@@ -11,8 +11,8 @@ bot = telebot.TeleBot(TOKEN)
 def start_cmd(message: Message):
     bot.reply_to(
         message, 
-        "Привет! Я ИИ-генератор TikTok. Отправь мне видео (как документ или видеофайл), "
-        "а я найду в нем интересные моменты, добавлю крутые субтитры и пришлю готовые ролики 9:16!"
+        "Hello. I am the AI TikTok Generator. Send me a video (as a document or video file), "
+        "and I will analyze it for interesting moments, add subtitles, and return vertical 9:16 videos."
     )
 
 @bot.message_handler(content_types=['video', 'document'])
@@ -27,18 +27,18 @@ def handle_video(message: Message):
             file_name = getattr(message.document, 'file_name', f'document_{message.message_id}.mp4')
             file_size = message.document.file_size
 
-        # Telegram bot API без локального сервера ограничивает файлы до 20 МБ
+        # Telegram bot API limits files to 20 MB without a local server
         if file_size and file_size > 20 * 1024 * 1024:
-            bot.reply_to(message, "❌ Видео слишком большое! Ограничение Telegram — 20 МБ.")
+            bot.reply_to(message, "Video is too large. Telegram API limit is 20 MB.")
             return
 
-        msg = bot.reply_to(message, "📥 Скачиваю видео...")
+        msg = bot.reply_to(message, "Downloading video...")
         
-        # Получаем файл от Telegram
+        # Get file from Telegram
         file_info = bot.get_file(file_id)
         downloaded_file = bot.download_file(file_info.file_path)
 
-        # Создаем папку для пользователя
+        # Create user directory
         user_dir = os.path.join("bot_sessions", str(message.chat.id))
         os.makedirs(user_dir, exist_ok=True)
         
@@ -50,40 +50,40 @@ def handle_video(message: Message):
             new_file.write(downloaded_file)
 
         bot.edit_message_text(
-            "🤖 Начинаю ИИ-анализ и нарезку! (Это может занять 5-10 минут в зависимости от мощности компьютера)", 
+            "Starting AI analysis and processing. (This may take 5-10 minutes depending on hardware performance)", 
             chat_id=message.chat.id, 
             message_id=msg.message_id
         )
 
-        # Запускаем нашу логику из main.py
+        # Run main logic
         generated_files = process_video(input_path, output_dir)
 
         if not generated_files:
             bot.edit_message_text(
-                "😔 ИИ не смог найти ничего интересного в этом видео. Возможно, там мало диалогов.",
+                "The AI could not identify highly engaging moments in this video. It may lack sufficient dialogue.",
                 chat_id=message.chat.id, 
                 message_id=msg.message_id
             )
         else:
             bot.edit_message_text(
-                f"✅ Найдено {len(generated_files)} вирусных моментов! Отправляю...",
+                f"Found {len(generated_files)} viral moments. Sending files...",
                 chat_id=message.chat.id, 
                 message_id=msg.message_id
             )
             
-            # Отправляем готовые файлы пользователю
+            # Send generated files to the user
             for fpath in generated_files:
                 if os.path.exists(fpath):
                     with open(fpath, 'rb') as video_file:
                         bot.send_video(message.chat.id, video_file)
 
-        # Очистка исходного файла (опционально)
+        # Cleanup original file (optional)
         if os.path.exists(input_path):
             os.remove(input_path)
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Произошла ошибка: {str(e)}")
+        bot.send_message(message.chat.id, f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
-    print("🤖 Бот запущен! Ожидаю сообщений...")
+    print("Bot started. Waiting for messages...")
     bot.infinity_polling()

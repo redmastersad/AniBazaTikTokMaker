@@ -1,52 +1,52 @@
-# 🎥 TikTok AI Video Generator
+# TikTok AI Video Generator
 
-Полностью автоматизированный локальный AI-конвейер для создания коротких видео (TikTok, YouTube Shorts, Reels) из длинных видеофайлов. 
+A fully automated local AI pipeline for creating short vertical videos (TikTok, YouTube Shorts, Reels) from long video files.
 
-Скармливаете длинное скучное видео — на выходе получаете пачку сочных вертикальных вирусных роликов 9:16 с красивыми субтитрами, размытым фоном и идеальной обрезкой!
+Provide a long video, and the system will output a collection of vertical 9:16 videos featuring integrated subtitles, background blur, and optimal cropping.
 
-## 🔥 Возможности
-* **Полная автономность:** Работает локально, не требует API-ключей, подписок и денег.
-* **ИИ-Режиссер:** Использует `Llama 3.1` (Ollama) для поиска самых смешных, эпичных или драматичных моментов в видео.
-* **Ультра-точный транскрибатор:** Использует `faster-whisper (large-v3)` на вашей видеокарте для идеального распознавания текста (включая фильтрацию тишины).
-* **Кинематографичные субтитры:** Накладывает современные хардсаб-субтитры (шрифт Segoe UI Black, черная обводка) прямо на видео.
-* **TikTok-формат (9:16):** Автоматически блюрит задний фон и помещает оригинальное видео в центр, приближая его.
-* **Логотипы и Водяные знаки:** Возможность наложить ваш PNG-логотип поверх видео.
-* **Telegram Бот:** В комплекте идет код Telegram-бота. Вы можете кидать боту видео с телефона, а ваш ПК будет их нарезать!
+## Features
+* **Full Autonomy:** Operates locally without requiring API keys, subscriptions, or recurring costs.
+* **AI Director:** Utilizes `Llama 3.1` (Ollama) to identify the most engaging, significant, or dramatic moments within the footage.
+* **High-Precision Transcription:** Employs `faster-whisper (large-v3)` on the GPU for accurate speech-to-text conversion (including silence filtering).
+* **Cinematic Subtitles:** Hardcodes modern subtitles (Segoe UI Black font, black outline) directly onto the video stream.
+* **Vertical Format (9:16):** Automatically blurs the background and centers the original video, scaling it appropriately.
+* **Watermarks and Logos:** Supports overlaying a custom PNG logo onto the final output.
+* **Telegram Bot Integration:** Includes the source code for a Telegram bot, allowing users to send videos from mobile devices for remote processing on the host machine.
 
-## ⚙️ Системные требования
-- **ОС:** Windows 10/11
-- **GPU:** Видеокарта NVIDIA (рекомендуется от 6 ГБ видеопамяти для CUDA). Без видеокарты программа автоматически переключится на процессор, но работать будет дольше.
-- Установленные в системе **Python 3.9+** и **FFmpeg**.
+## System Requirements
+- **OS:** Windows 10/11
+- **GPU:** NVIDIA Graphics Card (6 GB VRAM minimum recommended for CUDA). The software will fallback to the CPU if no suitable GPU is detected, resulting in significantly increased processing times.
+- **Dependencies:** **Python 3.9+** and **FFmpeg** must be installed on the system.
 
-## 🚀 Установка (Для Windows)
+## Installation (Windows)
 
-1. **Склонируйте репозиторий:**
+1. **Clone the repository:**
    ```bash
-   git clone https://github.com/ВАШ_НИК/tiktok-ai-generator.git
+   git clone https://github.com/YOUR_USERNAME/tiktok-ai-generator.git
    cd tiktok-ai-generator
    ```
 
-2. **Установите базовые программы:**
-   - Скачайте и установите [Ollama](https://ollama.com/) (он нужен для работы ИИ-режиссера).
-   - Убедитесь, что у вас установлен `FFmpeg` и прописан в системную переменную `PATH`.
+2. **Install prerequisite software:**
+   - Download and install [Ollama](https://ollama.com/) (required for the AI Director module).
+   - Ensure `FFmpeg` is installed and added to the system `PATH` environment variable.
 
-3. **Автоматическая установка:**
-   Просто запустите файл `install.bat`. 
-   Он сам создаст виртуальное окружение, скачает гигабайты нужных нейросетей, установит библиотеки CUDA и подготовит всё к работе.
+3. **Automated Setup:**
+   Execute the `install.bat` file. 
+   This script creates a virtual environment, downloads the necessary neural network models, installs CUDA dependencies, and configures the environment.
 
-## 🎮 Как использовать
+## Usage
 
-**Способ 1 (Desktop GUI):**
-Запустите `run_tiktok_ai.bat`.
-Откроется удобное окно программы. Выберите исходное видео (например, серию аниме или подкаст), папку для сохранения и (по желанию) PNG логотип. Нажмите кнопку и ждите результата!
+**Method 1 (Desktop GUI):**
+Launch `run_tiktok_ai.bat`.
+The application window will open. Select the source video file (e.g., a podcast or recording), specify the output directory, and optionally select a PNG logo. Initiate the process and wait for completion.
 
-**Способ 2 (Telegram Бот):**
-1. Получите токен бота у `@BotFather` в Telegram.
-2. Откройте файл `bot.py` и вставьте токен в строчку `TOKEN = "YOUR_BOT_TOKEN"`.
-3. Запустите `run_bot.bat`.
-4. Кидайте боту видео прямо в чат Telegram!
+**Method 2 (Telegram Bot):**
+1. Obtain a bot token from `@BotFather` on Telegram.
+2. Open `bot.py` and assign the token to the `TOKEN` variable: `TOKEN = "YOUR_BOT_TOKEN"`.
+3. Launch `run_bot.bat`.
+4. Send video files directly to the bot via Telegram chat.
 
-## 🛠 Технологии под капотом
+## Technical Stack
 - `faster-whisper` + `Silero VAD`
 - `Ollama` (`Llama 3.1 8B`)
 - `ffmpeg-python`

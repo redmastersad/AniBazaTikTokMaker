@@ -116,10 +116,11 @@ Transcript:
             end_t = float(h.get("end_time", 0))
             if start_t > 0 and end_t > start_t:
                 # Строгий лимит: максимум 60 секунд на ролик
+                # Strict limit: maximum 60 seconds per clip
                 if end_t - start_t > 60.0:
                     end_t = start_t + 60.0
                 
-                # Защита от микро-роликов
+                # Protection against micro-clips
                 if end_t - start_t < 15.0:
                     continue
                     
@@ -130,7 +131,7 @@ Transcript:
                     "explanation": h.get("explanation", "")
                 })
         
-        # Защита от дубликатов и пересекающихся моментов
+        # Protection against duplicates and overlapping moments
         result.sort(key=lambda x: x["start"])
         filtered_result = []
         
@@ -140,7 +141,7 @@ Transcript:
                 print(f"Found highlight: '{h['title']}' ({h['start']}s - {h['end']}s)")
             else:
                 last_h = filtered_result[-1]
-                # Если новый момент начинается раньше, чем закончился старый (+ буфер 5 сек), пропускаем его
+                # If the new moment starts before the old one ends (+ 5 sec buffer), skip it
                 if h["start"] < last_h["end"] + 5.0:
                     print(f"Skipping overlapping highlight: '{h['title']}'")
                     continue

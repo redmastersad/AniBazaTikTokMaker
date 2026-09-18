@@ -7,12 +7,12 @@ from analyzer import find_highlights
 from video_editor import format_video
 from subtitles import generate_ass_subtitles, burn_subtitles
 
-def process_video(video_path: str, output_dir: str, logo_path: str = None):
+def process_video(video_path: str, output_dir: str, logo_path: str = None, language: str = "ru"):
     print("=== TikTok AI Video Generator ===")
     
     # 1. Transcribe (Generate subtitles data)
     print("\n--- Step 1: Transcription ---")
-    transcript, words_data = transcribe_video(video_path, model_size="large-v3")
+    transcript, words_data = transcribe_video(video_path, model_size="large-v3", language=language)
     
     # 2. Analyze (Find highlights)
     print("\n--- Step 2: AI Analysis ---")
@@ -20,7 +20,7 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None):
     
     if not highlights:
         print("No highlights found by AI.")
-        raise ValueError("ИИ не смог найти интересных моментов в этом видео. Возможно, оно слишком короткое или в нем мало разговоров.")
+        raise ValueError("AI could not find interesting moments in this video. It might be too short or lack dialogue.")
         
     os.makedirs(output_dir, exist_ok=True)
     generated_files = []
