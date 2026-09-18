@@ -17,7 +17,7 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
-        self.logos_dir = os.path.abspath(os.path.join("Assets", "Logos"))
+        self.logos_dir = os.path.abspath(os.path.join("Assets", "Logo"))
         self.music_dir = os.path.abspath(os.path.join("Assets", "Music"))
         os.makedirs(self.logos_dir, exist_ok=True)
         os.makedirs(self.music_dir, exist_ok=True)
