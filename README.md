@@ -1,22 +1,31 @@
-# TikTok AI Video Generator
+# AniBaza TikTok AI Video Generator
 
-A fully automated local AI pipeline for creating short vertical videos (TikTok, YouTube Shorts, Reels) from long video files.
+**⚡ EXCLUSIVELY DEVELOPED FOR ANIBAZA ⚡**
+
+A fully automated local AI pipeline for creating short vertical videos (TikTok, YouTube Shorts, Reels) from long video files, tailored specifically for the AniBaza team workflows.
 
 Provide a long video, and the system will output a collection of vertical 9:16 videos featuring integrated subtitles, background blur, and optimal cropping.
 
+## ⚠️ CRITICAL REQUIREMENT: FONT INSTALLATION
+**For the subtitles to render correctly, you MUST install the `Montserrat Black` font on your Windows system.**
+If this font is missing, FFmpeg will fallback to a default system font, which will ruin the TikTok-style aesthetic of the subtitles. 
+Make sure you download and install the Montserrat font family (specifically the "Black" weight) before running the generator.
+
 ## Features
+* **AniBaza Custom AI Director:** Utilizes `Llama 3.1` (Ollama) to identify the most engaging, significant, or dramatic moments within the footage.
 * **Full Autonomy:** Operates locally without requiring API keys, subscriptions, or recurring costs.
-* **AI Director:** Utilizes `Llama 3.1` (Ollama) to identify the most engaging, significant, or dramatic moments within the footage.
-* **High-Precision Transcription:** Employs `faster-whisper (large-v3)` on the GPU for accurate speech-to-text conversion (including silence filtering).
-* **Cinematic Subtitles:** Hardcodes modern subtitles (Segoe UI Black font, black outline) directly onto the video stream.
-* **Vertical Format (9:16):** Automatically blurs the background and centers the original video, scaling it appropriately.
+* **High-Precision Transcription:** Employs `faster-whisper (large-v3)` on the GPU for accurate speech-to-text conversion.
+* **Smart Jump Cuts:** Automatically cuts out silences > 2.0s without breaking dialogues.
+* **Cinematic Subtitles:** Hardcodes modern TikTok-style karaoke subtitles (`Montserrat Black` font) directly onto the video stream.
+* **Vertical Format (9:16):** Automatically blurs the background and centers the original video.
 * **Watermarks and Logos:** Supports overlaying a custom PNG logo onto the final output.
-* **Telegram Bot Integration:** Includes the source code for a Telegram bot, allowing users to send videos from mobile devices for remote processing on the host machine.
+* **Telegram Bot Integration:** Includes the source code for a Telegram bot, allowing remote processing.
 
 ## System Requirements
 - **OS:** Windows 10/11
-- **GPU:** NVIDIA Graphics Card (6 GB VRAM minimum recommended for CUDA). The software will fallback to the CPU if no suitable GPU is detected, resulting in significantly increased processing times.
+- **GPU:** NVIDIA Graphics Card (6 GB VRAM minimum recommended for CUDA). 
 - **Dependencies:** **Python 3.9+** and **FFmpeg** must be installed on the system.
+- **Fonts:** `Montserrat Black` font installed in Windows.
 
 ## Installation (Windows)
 
@@ -28,7 +37,8 @@ Provide a long video, and the system will output a collection of vertical 9:16 v
 
 2. **Install prerequisite software:**
    - Download and install [Ollama](https://ollama.com/) (required for the AI Director module).
-   - Ensure `FFmpeg` is installed and added to the system `PATH` environment variable.
+   - Ensure `FFmpeg` is installed and added to the system `PATH`.
+   - **Install the `Montserrat` font family on your PC.**
 
 3. **Automated Setup:**
    Execute the `install.bat` file. 
@@ -46,8 +56,5 @@ The application window will open. Select the source video file (e.g., a podcast 
 3. Launch `run_bot.bat`.
 4. Send video files directly to the bot via Telegram chat.
 
-## Technical Stack
-- `faster-whisper` + `Silero VAD`
-- `Ollama` (`Llama 3.1 8B`)
-- `ffmpeg-python`
-- `customtkinter` (UI)
+---
+*Created exclusively for the **AniBaza** project.*
