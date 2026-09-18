@@ -58,7 +58,7 @@ def get_average_face_x(video_path: str, start_time: float, end_time: float) -> f
         
     return float(np.mean(face_xs))
 
-def format_video(video_path: str, output_path: str, subclips: list, logo_path: str = None):
+def format_video(video_path: str, output_path: str, subclips: list, logo_path: str = None, music_path: str = None):
     """
     Creates a 9:16 TikTok video by concatenating subclips, placing the original 16:9 video in the center,
     and filling the background with a blurred, scaled version of the video.
@@ -131,6 +131,13 @@ def format_video(video_path: str, output_path: str, subclips: list, logo_path: s
         logo = logo.filter('scale', 'min(700,iw)', '-1')
         # Overlay at the top center, y=80 for some padding
         video = ffmpeg.overlay(video, logo, x='(main_w-overlay_w)/2', y='80')
+        
+    # 5. Background Music (if provided)
+    if music_path and os.path.exists(music_path):
+        # -8dB as requested, looped indefinitely to match video length
+        bg_music = ffmpeg.input(music_path, stream_loop=-1).audio.filter('volume', '-8dB')
+        # Mix audio tracks. duration='first' ensures it stops when the main video audio stops.
+        audio = ffmpeg.filter([audio, bg_music], 'amix', inputs=2, duration='first', dropout_transition=2)
     
     try:
         out = ffmpeg.output(video, audio, output_path, vcodec='libx264', acodec='aac', strict='experimental')

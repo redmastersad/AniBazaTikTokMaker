@@ -12,14 +12,19 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("TikTok AI Video Generator")
-        self.geometry("600x450")
+        self.geometry("600x600")
         
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
 
+        self.logos_dir = os.path.abspath(os.path.join("Assets", "Logos"))
+        self.music_dir = os.path.abspath(os.path.join("Assets", "Music"))
+        os.makedirs(self.logos_dir, exist_ok=True)
+        os.makedirs(self.music_dir, exist_ok=True)
+
         # Layout
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(5, weight=1)
+        self.grid_rowconfigure(7, weight=1)
 
         # Header frame
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -64,19 +69,42 @@ class App(ctk.CTk):
         self.logo_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
         self.logo_frame.grid_columnconfigure(0, weight=1)
 
-        self.logo_path_var = ctk.StringVar(value="")
-        self.logo_entry = ctk.CTkEntry(self.logo_frame, textvariable=self.logo_path_var, state="disabled", placeholder_text="PNG Logo (Optional)")
-        self.logo_entry.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
+        self.logo_var = ctk.StringVar(value="None")
+        logo_files = ["None"] + [f for f in os.listdir(self.logos_dir) if f.lower().endswith('.png')]
+        self.logo_menu = ctk.CTkOptionMenu(self.logo_frame, values=logo_files, variable=self.logo_var)
+        self.logo_menu.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
 
         self.browse_logo_btn = ctk.CTkButton(self.logo_frame, text="Select Logo", command=self.browse_logo)
         self.browse_logo_btn.grid(row=0, column=1, padx=(5, 10), pady=10)
 
+        # Music Selection
+        self.music_frame = ctk.CTkFrame(self)
+        self.music_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
+        self.music_frame.grid_columnconfigure(0, weight=1)
+
+        self.music_var = ctk.StringVar(value="None")
+        music_files = ["None"] + [f for f in os.listdir(self.music_dir) if f.lower().endswith(('.mp3', '.wav', '.m4a', '.aac'))]
+        self.music_menu = ctk.CTkOptionMenu(self.music_frame, values=music_files, variable=self.music_var)
+        self.music_menu.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
+
+        self.browse_music_btn = ctk.CTkButton(self.music_frame, text="Select Music", command=self.browse_music)
+        self.browse_music_btn.grid(row=0, column=1, padx=(5, 10), pady=10)
+
+        # Settings Selection
+        self.settings_frame = ctk.CTkFrame(self)
+        self.settings_frame.grid(row=5, column=0, padx=20, pady=10, sticky="ew")
+        self.settings_frame.grid_columnconfigure(0, weight=1)
+        
+        self.remove_silence_var = ctk.BooleanVar(value=True)
+        self.remove_silence_cb = ctk.CTkCheckBox(self.settings_frame, text="Cut scenes without dialogues (Jump Cuts)", variable=self.remove_silence_var)
+        self.remove_silence_cb.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
         # Status and Run
         self.status_label = ctk.CTkLabel(self, text="Ready. Using Llama 3.1 8B and Whisper GPU.")
-        self.status_label.grid(row=4, column=0, padx=20, pady=10)
+        self.status_label.grid(row=6, column=0, padx=20, pady=10)
 
         self.run_btn = ctk.CTkButton(self, text="Generate Video", command=self.start_processing, height=40)
-        self.run_btn.grid(row=5, column=0, padx=20, pady=20, sticky="ew")
+        self.run_btn.grid(row=7, column=0, padx=20, pady=20, sticky="ew")
         
     def change_language(self, choice):
         if choice == "RU":
@@ -85,7 +113,8 @@ class App(ctk.CTk):
             self.browse_btn.configure(text="Выбрать Видео")
             self.browse_out_btn.configure(text="Выбрать Папку")
             self.browse_logo_btn.configure(text="Выбрать Лого")
-            self.logo_entry.configure(placeholder_text="PNG Логотип (Опционально)")
+            self.browse_music_btn.configure(text="Выбрать Музыку")
+            self.remove_silence_cb.configure(text="Обрезать сцены без диалогов (Jump Cuts)")
             self.run_btn.configure(text="Сгенерировать Видео")
             if "Ready" in self.status_label.cget("text"):
                 self.status_label.configure(text="Готово. Используется Llama 3.1 8B и Whisper GPU.")
@@ -95,7 +124,8 @@ class App(ctk.CTk):
             self.browse_btn.configure(text="Select Video")
             self.browse_out_btn.configure(text="Select Output")
             self.browse_logo_btn.configure(text="Select Logo")
-            self.logo_entry.configure(placeholder_text="PNG Logo (Optional)")
+            self.browse_music_btn.configure(text="Select Music")
+            self.remove_silence_cb.configure(text="Cut scenes without dialogues (Jump Cuts)")
             self.run_btn.configure(text="Generate Video")
             if "Готово" in self.status_label.cget("text"):
                 self.status_label.configure(text="Ready. Using Llama 3.1 8B and Whisper GPU.")
@@ -122,12 +152,44 @@ class App(ctk.CTk):
             filetypes=[("PNG images", "*.png")]
         )
         if filename:
-            self.logo_path_var.set(filename)
+            current_values = self.logo_menu.cget("values")
+            if filename not in current_values:
+                self.logo_menu.configure(values=current_values + [filename])
+            self.logo_var.set(filename)
+
+    def browse_music(self):
+        title = "Select Music File" if self.ui_lang_var.get() == "EN" else "Выберите Музыкальный Файл"
+        filename = filedialog.askopenfilename(
+            title=title,
+            filetypes=[("Audio files", "*.mp3 *.wav *.m4a *.aac")]
+        )
+        if filename:
+            current_values = self.music_menu.cget("values")
+            if filename not in current_values:
+                self.music_menu.configure(values=current_values + [filename])
+            self.music_var.set(filename)
 
     def start_processing(self):
         video_path = self.file_path_var.get()
         out_path = self.out_path_var.get()
-        logo_path = self.logo_path_var.get()
+        
+        logo_val = self.logo_var.get()
+        logo_path = None
+        if logo_val != "None":
+            if os.path.exists(logo_val):
+                logo_path = logo_val
+            else:
+                logo_path = os.path.join(self.logos_dir, logo_val)
+                
+        music_val = self.music_var.get()
+        music_path = None
+        if music_val != "None":
+            if os.path.exists(music_val):
+                music_path = music_val
+            else:
+                music_path = os.path.join(self.music_dir, music_val)
+                
+        remove_silence = self.remove_silence_var.get()
 
         if not video_path:
             err_msg = "Please select a video file." if self.ui_lang_var.get() == "EN" else "Пожалуйста, выберите видеофайл."
@@ -144,9 +206,9 @@ class App(ctk.CTk):
             self.status_label.configure(text="Processing with AI...")
 
         # Run in thread so GUI doesn't freeze
-        threading.Thread(target=self.run_process_thread, args=(video_path, out_path, logo_path), daemon=True).start()
+        threading.Thread(target=self.run_process_thread, args=(video_path, out_path, logo_path, music_path, remove_silence), daemon=True).start()
 
-    def run_process_thread(self, video_path, out_path, logo_path):
+    def run_process_thread(self, video_path, out_path, logo_path, music_path, remove_silence):
         class StdoutRedirector:
             def __init__(self, app):
                 self.app = app
@@ -162,7 +224,7 @@ class App(ctk.CTk):
         sys.stdout = StdoutRedirector(self)
         
         try:
-            process_video(video_path, out_path, logo_path=logo_path if logo_path else None)
+            process_video(video_path, out_path, logo_path=logo_path, music_path=music_path, remove_silence=remove_silence)
             
             if self.ui_lang_var.get() == "RU":
                 messagebox.showinfo("Успех", "Видео успешно созданы. Проверьте папку вывода.")

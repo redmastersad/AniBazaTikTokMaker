@@ -17,11 +17,9 @@ def get_next_video_number(output_dir: str) -> int:
                     num = int(name)
                     if num > max_num:
                         max_num = num
-    return max_num + 1
-
-def get_subclips(words_data: list, start_time: float, end_time: float, max_silence: float = 2.0) -> list:
+def get_subclips(words_data: list, start_time: float, end_time: float, max_silence: float = 2.0, remove_silence: bool = True) -> list:
     clip_words = [w for w in words_data if w['start'] >= start_time - 0.5 and w['end'] <= end_time + 0.5]
-    if not clip_words:
+    if not clip_words or not remove_silence:
         return [(start_time, end_time)]
         
     subclips = []
@@ -46,7 +44,7 @@ def get_subclips(words_data: list, start_time: float, end_time: float, max_silen
         
     return valid_subclips
 
-def process_video(video_path: str, output_dir: str, logo_path: str = None):
+def process_video(video_path: str, output_dir: str, logo_path: str = None, music_path: str = None, remove_silence: bool = True):
     print("=== TikTok AI Video Generator ===")
     
     # 1. Transcribe (Generate subtitles data)
@@ -75,11 +73,11 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None):
         ass_path = os.path.join(output_dir, f"subs_{i}.ass")
         final_output_path = os.path.join(output_dir, f"{next_num}.mp4")
         
-        subclips = get_subclips(words_data, h['start'], h['end'])
+        subclips = get_subclips(words_data, h['start'], h['end'], remove_silence=remove_silence)
         
         # Crop and Format
         print(f"Formatting clip {i+1} / {len(highlights)} (Blur background, vertical layout, jump cuts)...")
-        format_video(video_path, temp_cropped_path, subclips, logo_path=logo_path)
+        format_video(video_path, temp_cropped_path, subclips, logo_path=logo_path, music_path=music_path)
         
         # 3b. Subtitles
         print("Generating subtitles...")
