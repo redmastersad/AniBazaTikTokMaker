@@ -22,8 +22,8 @@ Provide a long video, and the system will output a collection of vertical 9:16 v
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/tiktok-ai-generator.git
-   cd tiktok-ai-generator
+   git clone https://github.com/redmastersad/AniBazaTikTokMaker.git
+   cd AniBazaTikTokMaker
    ```
 
 2. **Install prerequisite software:**
