@@ -1,12 +1,12 @@
 # AniBaza TikTok AI Video Generator
 
-**⚡ EXCLUSIVELY DEVELOPED FOR ANIBAZA ⚡**
+**EXCLUSIVELY DEVELOPED FOR ANIBAZA**
 
 A fully automated local AI pipeline for creating short vertical videos (TikTok, YouTube Shorts, Reels) from long video files, tailored specifically for the AniBaza team workflows.
 
 Provide a long video, and the system will output a collection of vertical 9:16 videos featuring integrated subtitles, background blur, and optimal cropping.
 
-## ⚠️ CRITICAL REQUIREMENT: FONT INSTALLATION
+## CRITICAL REQUIREMENT: FONT INSTALLATION
 **For the subtitles to render correctly, you MUST install the `Montserrat Black` font on your Windows system.**
 If this font is missing, FFmpeg will fallback to a default system font, which will ruin the TikTok-style aesthetic of the subtitles. 
 Make sure you download and install the Montserrat font family (specifically the "Black" weight) before running the generator.
