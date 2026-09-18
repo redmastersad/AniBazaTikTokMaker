@@ -2,22 +2,34 @@ import os
 import math
 import ffmpeg
 
-def generate_ass_subtitles(words_data, output_ass_path, highlight_start, highlight_end):
+def generate_ass_subtitles(words_data, output_ass_path, subclips):
     """
     Generates an Advanced SubStation Alpha (.ass) file with TikTok style subtitles.
-    Only includes words within the highlight window.
+    Maps absolute word timestamps to relative timestamps based on the concatenated subclips.
     """
-    # Filter words for this highlight
     clip_words = []
-    for w in words_data:
-        # Give a small 0.2s margin
-        if w['end'] >= highlight_start - 0.2 and w['start'] <= highlight_end + 0.2:
-            # Adjust timestamps relative to the start of the clip
-            clip_words.append({
-                'word': w['word'].strip(),
-                'start': max(0.0, w['start'] - highlight_start),
-                'end': max(0.1, w['end'] - highlight_start)
-            })
+    current_relative_time = 0.0
+    
+    for (start, end) in subclips:
+        for w in words_data:
+            # Word must fall within the subclip boundaries (with a small margin)
+            if w['end'] >= start - 0.2 and w['start'] <= end + 0.2:
+                # Clamp the word to the subclip boundaries
+                w_start = max(start, w['start'])
+                w_end = min(end, w['end'])
+                
+                if w_end > w_start:
+                    # Convert to relative time within the final concatenated video
+                    rel_start = current_relative_time + (w_start - start)
+                    rel_end = current_relative_time + (w_end - start)
+                    
+                    clip_words.append({
+                        'word': w['word'].strip(),
+                        'start': rel_start,
+                        'end': rel_end
+                    })
+        
+        current_relative_time += (end - start)
 
     # ASS Header
     ass_content = """[Script Info]

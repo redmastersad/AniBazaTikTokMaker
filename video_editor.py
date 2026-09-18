@@ -58,9 +58,9 @@ def get_average_face_x(video_path: str, start_time: float, end_time: float) -> f
         
     return float(np.mean(face_xs))
 
-def format_video(video_path: str, output_path: str, start_time: float, end_time: float, logo_path: str = None):
+def format_video(video_path: str, output_path: str, subclips: list, logo_path: str = None):
     """
-    Creates a 9:16 TikTok video by placing the original 16:9 video in the center 
+    Creates a 9:16 TikTok video by concatenating subclips, placing the original 16:9 video in the center,
     and filling the background with a blurred, scaled version of the video.
     """
     probe = ffmpeg.probe(video_path)
@@ -68,8 +68,6 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
     orig_w = int(video_info['width'])
     orig_h = int(video_info['height'])
     
-    # We want a 9:16 output. Let's base the width on the original height for good resolution.
-    # For a 1080p landscape (1920x1080), this makes a 1080x1920 portrait.
     target_w = orig_h
     target_h = int(target_w * 16 / 9)
     
@@ -79,11 +77,24 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
     
     print(f"Formatting video to 9:16 (Resolution: {target_w}x{target_h}) with blurred background...")
     
-    stream = ffmpeg.input(video_path, ss=start_time, t=end_time - start_time)
+    # Build concat streams
+    streams = []
+    for (start, end) in subclips:
+        s = ffmpeg.input(video_path, ss=start, t=end - start)
+        streams.append(s.video)
+        streams.append(s.audio)
+        
+    if len(subclips) > 1:
+        concatenated = ffmpeg.concat(*streams, v=1, a=1)
+        base_video = concatenated.video
+        audio = concatenated.audio
+    else:
+        base_video = streams[0]
+        audio = streams[1]
     
     # Anti-copyright & Polish: Mirror video, advanced color grading, vignette, sharpen, and film grain
     vid_stream = (
-        stream.video
+        base_video
         .filter('hflip') # Mirroring (avoids copyright issues)
         .filter('eq', contrast=1.15, brightness=-0.02, saturation=1.3) # Deep contrast and saturated colors
         .filter('unsharp', 5, 5, 1.0, 5, 5, 0.0) # Light sharpening
@@ -120,8 +131,6 @@ def format_video(video_path: str, output_path: str, start_time: float, end_time:
         logo = logo.filter('scale', 'min(700,iw)', '-1')
         # Overlay at the top center, y=80 for some padding
         video = ffmpeg.overlay(video, logo, x='(main_w-overlay_w)/2', y='80')
-        
-    audio = stream.audio
     
     try:
         out = ffmpeg.output(video, audio, output_path, vcodec='libx264', acodec='aac', strict='experimental')

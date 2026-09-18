@@ -19,6 +19,33 @@ def get_next_video_number(output_dir: str) -> int:
                         max_num = num
     return max_num + 1
 
+def get_subclips(words_data: list, start_time: float, end_time: float, max_silence: float = 2.0) -> list:
+    clip_words = [w for w in words_data if w['start'] >= start_time - 0.5 and w['end'] <= end_time + 0.5]
+    if not clip_words:
+        return [(start_time, end_time)]
+        
+    subclips = []
+    current_start = start_time
+    
+    for i in range(len(clip_words) - 1):
+        w1 = clip_words[i]
+        w2 = clip_words[i+1]
+        
+        # If silence between words is greater than max_silence, cut it out
+        if w2['start'] - w1['end'] > max_silence:
+            subclips.append((current_start, w1['end'] + 0.5))
+            current_start = max(w1['end'] + 0.5, w2['start'] - 0.3)
+            
+    subclips.append((current_start, end_time))
+    
+    # Filter out empty or negative duration clips
+    valid_subclips = [(s, e) for s, e in subclips if e - s > 0.1]
+    
+    if not valid_subclips:
+        return [(start_time, end_time)]
+        
+    return valid_subclips
+
 def process_video(video_path: str, output_dir: str, logo_path: str = None):
     print("=== TikTok AI Video Generator ===")
     
@@ -48,13 +75,15 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None):
         ass_path = os.path.join(output_dir, f"subs_{i}.ass")
         final_output_path = os.path.join(output_dir, f"{next_num}.mp4")
         
+        subclips = get_subclips(words_data, h['start'], h['end'])
+        
         # Crop and Format
-        print(f"Formatting clip {i+1} / {len(highlights)} (Blur background, vertical layout)...")
-        format_video(video_path, temp_cropped_path, h['start'], h['end'], logo_path=logo_path)
+        print(f"Formatting clip {i+1} / {len(highlights)} (Blur background, vertical layout, jump cuts)...")
+        format_video(video_path, temp_cropped_path, subclips, logo_path=logo_path)
         
         # 3b. Subtitles
         print("Generating subtitles...")
-        generate_ass_subtitles(words_data, ass_path, h['start'], h['end'])
+        generate_ass_subtitles(words_data, ass_path, subclips)
         burn_subtitles(temp_cropped_path, ass_path, final_output_path)
         
         # Cleanup temp file

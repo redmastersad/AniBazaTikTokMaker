@@ -33,10 +33,54 @@ def prepare_transcript_for_llm(words_data: List[dict]) -> str:
         
     return text_with_timestamps
 
+def snap_to_sentence_boundaries(start_t: float, end_t: float, words_data: List[dict]) -> tuple[float, float]:
+    if not words_data:
+        return start_t, end_t
+        
+    # Find word closest to start_t
+    start_idx = 0
+    min_start_diff = float('inf')
+    for i, w in enumerate(words_data):
+        diff = abs(w['start'] - start_t)
+        if diff < min_start_diff:
+            min_start_diff = diff
+            start_idx = i
+            
+    # Find word closest to end_t
+    end_idx = len(words_data) - 1
+    min_end_diff = float('inf')
+    for i, w in enumerate(words_data):
+        diff = abs(w['end'] - end_t)
+        if diff < min_end_diff:
+            min_end_diff = diff
+            end_idx = i
+            
+    # Snap start to the beginning of the sentence if possible
+    new_start_idx = start_idx
+    for i in range(start_idx - 1, max(-1, start_idx - 15), -1):
+        if words_data[i]['word'].strip().endswith(('.', '!', '?')):
+            new_start_idx = i + 1
+            break
+            
+    if new_start_idx >= len(words_data):
+        new_start_idx = start_idx
+        
+    # Snap end to the end of the sentence if possible
+    new_end_idx = end_idx
+    for i in range(end_idx, min(len(words_data), end_idx + 15)):
+        if words_data[i]['word'].strip().endswith(('.', '!', '?')):
+            new_end_idx = i
+            break
+            
+    snapped_start = max(0.0, words_data[new_start_idx]['start'] - 0.3)
+    snapped_end = words_data[new_end_idx]['end'] + 0.5
+    
+    return snapped_start, snapped_end
+
 def find_highlights(words_data: List[dict]) -> List[dict]:
     """
     Uses local Ollama API to analyze the transcript without needing an API key.
-    Requires Ollama to be running with the 'llama3.2' model.
+    Requires Ollama to be running with the 'llama3.1' model.
     """
     transcript_with_timestamps = prepare_transcript_for_llm(words_data)
     
@@ -47,13 +91,17 @@ def find_highlights(words_data: List[dict]) -> List[dict]:
         
     prompt = f"""
 You are an expert anime editor for TikTok and YouTube Shorts.
-Your goal is to find the most epic, dramatic, action-packed, or highly emotional scenes from the following anime episode transcript.
+Your goal is to find the most EPIC, deep, or highly emotional scenes from the following anime episode transcript. 
+We want scenes that have a strong "hook" and a satisfying setup that makes the viewer want to watch the next TikTok or the anime itself.
+Look for deep quotes, intense arguments, major reveals, or dramatic cliffhangers.
 The transcript contains timestamp markers (e.g., [10.5s]).
 Find between 3 and 6 distinct highlights. It is very important that you find at least 3!
+
 STRICT RULES FOR HIGHLIGHTS:
 1. Each highlight MUST be between 20 and 60 seconds long. NEVER exceed 60 seconds! TikToks must be short!
-2. Do not select short boring clips. Focus ONLY on the climax, fights, or big reveals.
+2. Do NOT select scenes with very little dialogue or empty descriptions. Focus ONLY on dense, engaging dialogue, epic quotes, and intense interactions.
 3. You MUST ONLY return the exact moments present in the text, using the provided timestamps. Do not invent new timestamps.
+4. Try to end the clip on a dramatic cliffhanger, a deep quote, or a punchline.
 
 Return ONLY a valid JSON object without any markdown wrapping. It must exactly match this format:
 {{
@@ -115,7 +163,9 @@ Transcript:
             start_t = float(h.get("start_time", 0))
             end_t = float(h.get("end_time", 0))
             if start_t > 0 and end_t > start_t:
-                # Строгий лимит: максимум 60 секунд на ролик
+                # Snap boundaries and add padding
+                start_t, end_t = snap_to_sentence_boundaries(start_t, end_t, words_data)
+                
                 # Strict limit: maximum 60 seconds per clip
                 if end_t - start_t > 60.0:
                     end_t = start_t + 60.0
