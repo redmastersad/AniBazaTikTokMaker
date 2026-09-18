@@ -52,15 +52,9 @@ class App(ctk.CTk):
             self.header_frame, 
             text="AniBaza AI Generator" if not self.logo_img else "", 
             font=ctk.CTkFont(size=24, weight="bold"),
-            image=self.logo_img,
-            compound="left"
+            image=self.logo_img
         )
-        self.title_label.grid(row=0, column=0, sticky="w")
-        
-        # UI Language Switch
-        self.ui_lang_var = ctk.StringVar(value="EN")
-        self.lang_switch = ctk.CTkSegmentedButton(self.header_frame, values=["EN", "RU"], variable=self.ui_lang_var, command=self.change_language)
-        self.lang_switch.grid(row=0, column=1, sticky="e")
+        self.title_label.grid(row=0, column=0, sticky="ew") # Center it
 
         # File Selection
         self.file_frame = ctk.CTkFrame(self)
@@ -120,6 +114,11 @@ class App(ctk.CTk):
         self.remove_silence_var = ctk.BooleanVar(value=True)
         self.remove_silence_cb = ctk.CTkCheckBox(self.settings_frame, text="Cut scenes without dialogues (Jump Cuts)", variable=self.remove_silence_var)
         self.remove_silence_cb.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+        # UI Language Switch (Moved from header)
+        self.ui_lang_var = ctk.StringVar(value="EN")
+        self.lang_switch = ctk.CTkSegmentedButton(self.settings_frame, values=["EN", "RU"], variable=self.ui_lang_var, command=self.change_language)
+        self.lang_switch.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="w")
 
         # Status and Run
         self.status_label = ctk.CTkLabel(self, text="Ready. Using Llama 3.1 8B and Whisper GPU.")
