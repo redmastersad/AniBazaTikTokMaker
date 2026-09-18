@@ -17,7 +17,7 @@ except Exception:
 
 from faster_whisper import WhisperModel
 
-def transcribe_video(video_path: str, model_size: str = "large-v3", language: str = "ru"):
+def transcribe_video(video_path: str, model_size: str = "large-v3"):
     """
     Transcribes a video file and returns segments with word-level timestamps.
     """
@@ -32,8 +32,8 @@ def transcribe_video(video_path: str, model_size: str = "large-v3", language: st
     print(f"Starting transcription for {video_path}...")
     
     try:
-        # Force language and filter silence
-        segments, info = model.transcribe(video_path, word_timestamps=True, language=language, vad_filter=True)
+        # Force Russian language and filter silence
+        segments, info = model.transcribe(video_path, word_timestamps=True, language="ru", vad_filter=True)
         print(f"Language forced to '{info.language}'")
         
         transcript_text = ""
@@ -54,7 +54,7 @@ def transcribe_video(video_path: str, model_size: str = "large-v3", language: st
         print(f"CUDA error during transcription: {e}")
         print("Falling back to CPU with 'small' model due to missing NVIDIA DLLs...")
         model = WhisperModel("small", device="cpu", compute_type="int8")
-        segments, info = model.transcribe(video_path, word_timestamps=True, language=language, vad_filter=True)
+        segments, info = model.transcribe(video_path, word_timestamps=True, language="ru", vad_filter=True)
         
         transcript_text = ""
         words_data = []

@@ -1,11 +1,22 @@
 import os
+import sys
 import telebot
 from telebot.types import Message
 from main import process_video
 
 # Replace 'YOUR_BOT_TOKEN' with the token from BotFather
 TOKEN = "YOUR_BOT_TOKEN"
-bot = telebot.TeleBot(TOKEN)
+
+if TOKEN == "YOUR_BOT_TOKEN":
+    print("ERROR: You have not configured your Telegram Bot Token.")
+    print("Please open bot.py and replace 'YOUR_BOT_TOKEN' with the token you received from @BotFather.")
+    sys.exit(1)
+
+try:
+    bot = telebot.TeleBot(TOKEN)
+except Exception as e:
+    print(f"ERROR: Failed to initialize bot. Is your token correct? ({e})")
+    sys.exit(1)
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message: Message):
