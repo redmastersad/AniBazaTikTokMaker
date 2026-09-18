@@ -17,6 +17,7 @@ def get_next_video_number(output_dir: str) -> int:
                     num = int(name)
                     if num > max_num:
                         max_num = num
+    return max_num + 1
 def get_subclips(words_data: list, start_time: float, end_time: float, max_silence: float = 2.0, remove_silence: bool = True) -> list:
     clip_words = [w for w in words_data if w['start'] >= start_time - 0.5 and w['end'] <= end_time + 0.5]
     if not clip_words or not remove_silence:
