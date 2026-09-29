@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox
 import threading
 import os
 import sys
+import json
 from PIL import Image
 
 # Import our processing function
@@ -136,6 +137,42 @@ class App(ctk.CTk):
         self.watermark_label = ctk.CTkLabel(self, text="EXCLUSIVELY DEVELOPED FOR ANIBAZA", text_color="gray", font=ctk.CTkFont(size=10, weight="bold"))
         self.watermark_label.grid(row=8, column=0, pady=(0, 10))
         
+        self.load_settings()
+
+    def load_settings(self):
+        try:
+            if os.path.exists("settings.json"):
+                import json
+                with open("settings.json", "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    
+                if "out_path" in data and os.path.exists(data["out_path"]):
+                    self.out_path_var.set(data["out_path"])
+                
+                if "logo" in data and data["logo"] != "None":
+                    current_values = self.logo_menu.cget("values")
+                    if data["logo"] not in current_values:
+                        self.logo_menu.configure(values=current_values + [data["logo"]])
+                    self.logo_var.set(data["logo"])
+                    
+                if "music" in data and data["music"] != "None":
+                    current_values = self.music_menu.cget("values")
+                    if data["music"] not in current_values:
+                        self.music_menu.configure(values=current_values + [data["music"]])
+                    self.music_var.set(data["music"])
+                    
+                if "remove_silence" in data:
+                    self.remove_silence_var.set(data["remove_silence"])
+                    
+                if "ai_model" in data:
+                    self.ai_model_var.set(data["ai_model"])
+                    
+                if "ui_lang" in data:
+                    self.ui_lang_var.set(data["ui_lang"])
+                    self.change_language(data["ui_lang"])
+        except Exception as e:
+            print(f"Could not load settings: {e}")
+        
     def change_language(self, choice):
         if choice == "RU":
             self.title("Генератор AniBaza TikTok ИИ")
@@ -163,13 +200,13 @@ class App(ctk.CTk):
                 self.status_label.configure(text="Ready. Using Llama 3.1 8B and Whisper GPU.")
 
     def browse_file(self):
-        title = "Select Video File" if self.ui_lang_var.get() == "EN" else "Выберите Видеофайл"
-        filename = filedialog.askopenfilename(
+        title = "Select Video Files" if self.ui_lang_var.get() == "EN" else "Выберите Видеофайлы"
+        filenames = filedialog.askopenfilenames(
             title=title,
             filetypes=[("Video files", "*.mp4 *.mov *.avi *.mkv")]
         )
-        if filename:
-            self.file_path_var.set(filename)
+        if filenames:
+            self.file_path_var.set(";".join(filenames))
 
     def browse_output(self):
         title = "Select Output Directory" if self.ui_lang_var.get() == "EN" else "Выберите Папку"
@@ -201,8 +238,24 @@ class App(ctk.CTk):
                 self.music_menu.configure(values=current_values + [filename])
             self.music_var.set(filename)
 
+    def save_settings(self):
+        data = {
+            "out_path": self.out_path_var.get(),
+            "logo": self.logo_var.get(),
+            "music": self.music_var.get(),
+            "remove_silence": self.remove_silence_var.get(),
+            "ai_model": self.ai_model_var.get(),
+            "ui_lang": self.ui_lang_var.get()
+        }
+        try:
+            with open("settings.json", "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        except:
+            pass
+
     def start_processing(self):
-        video_path = self.file_path_var.get()
+        self.save_settings()
+        video_paths_str = self.file_path_var.get()
         out_path = self.out_path_var.get()
         
         logo_val = self.logo_var.get()
@@ -224,7 +277,7 @@ class App(ctk.CTk):
         remove_silence = self.remove_silence_var.get()
         ai_model = self.ai_model_var.get()
 
-        if not video_path:
+        if not video_paths_str:
             err_msg = "Please select a video file." if self.ui_lang_var.get() == "EN" else "Пожалуйста, выберите видеофайл."
             err_title = "Error" if self.ui_lang_var.get() == "EN" else "Ошибка"
             messagebox.showerror(err_title, err_msg)
@@ -238,10 +291,12 @@ class App(ctk.CTk):
             self.run_btn.configure(state="disabled", text="Processing... Check console.")
             self.status_label.configure(text=f"Using AI: {ai_model}...")
 
+        videos = [v.strip() for v in video_paths_str.split(";") if v.strip()]
+        
         # Run in thread so GUI doesn't freeze
-        threading.Thread(target=self.run_process_thread, args=(video_path, out_path, logo_path, music_path, remove_silence, ai_model), daemon=True).start()
+        threading.Thread(target=self.run_process_thread, args=(videos, out_path, logo_path, music_path, remove_silence, ai_model), daemon=True).start()
 
-    def run_process_thread(self, video_path, out_path, logo_path, music_path, remove_silence, ai_model):
+    def run_process_thread(self, videos, out_path, logo_path, music_path, remove_silence, ai_model):
         class StdoutRedirector:
             def __init__(self, app):
                 self.app = app
@@ -257,7 +312,9 @@ class App(ctk.CTk):
         sys.stdout = StdoutRedirector(self)
         
         try:
-            process_video(video_path, out_path, logo_path=logo_path, music_path=music_path, remove_silence=remove_silence, ai_model=ai_model)
+            for idx, video_path in enumerate(videos):
+                print(f"\n[{idx+1}/{len(videos)}] Starting process for: {video_path}")
+                process_video(video_path, out_path, logo_path=logo_path, music_path=music_path, remove_silence=remove_silence, ai_model=ai_model)
             
             if self.ui_lang_var.get() == "RU":
                 messagebox.showinfo("Успех", "Видео успешно созданы. Проверьте папку вывода.")
