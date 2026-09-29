@@ -90,36 +90,36 @@ def find_highlights(words_data: List[dict], model_name: str = "llama3.1") -> Lis
         return []
         
     prompt = f"""
-You are a genius-level viral video editor for TikTok, Shorts, and Reels. 
-Your goal is to extract the absolute BEST, most engaging, and viral segments from the provided video transcript.
-The transcript contains timestamp markers (e.g., [10.5s]).
+You are an elite TikTok/Reels editor specializing STRICTLY IN ANIME.
+Your goal is to extract the absolute BEST, most viral, and emotional anime scenes from this episode transcript.
 
-What makes a segment viral?
-- A powerful "hook" in the first 3 seconds (a controversial statement, a loud reaction, a crazy reveal, or an emotional peak).
-- High tension, intense arguments, deep philosophical quotes, or extremely funny/awkward moments.
-- A satisfying conclusion or a dramatic cliffhanger that makes people want to watch it again or argue in the comments.
-
-Find exactly 3 to 6 distinct viral highlights.
+WHAT YOU MUST FIND (Viral Anime Tropes):
+1. Villain Monologues & Philosophy (cold, calculating, or insane speeches about reality, pain, or power).
+2. The "Determination" / Hero Speech (refusing to give up, screaming with emotion).
+3. Shocking Betrayals, crazy plot twists, or dramatic reveals.
+4. Pure Hype Moments (characters trash-talking, revealing true power, or epic threats).
+5. Extremely funny, absurd, or highly awkward interactions.
 
 STRICT RULES:
-1. LENGTH: Each highlight MUST be between 25 and 60 seconds long. TikToks need enough time to build context, but must not exceed 1 minute.
-2. CONTENT: Focus ONLY on segments with dense, engaging dialogue. Avoid segments that are mostly silence or boring exposition.
-3. CONTEXT: The clip must make sense on its own. Start the clip slightly before the main action so the viewer understands what's happening.
-4. ACCURACY: You MUST ONLY return the exact moments present in the text. DO NOT invent timestamps.
+1. DURATION: Each clip MUST be between 25 and 60 seconds long.
+2. CONTENT: Focus ONLY on raw emotion, deep philosophy, intense screaming, or high comedy.
+3. BAN LIST: DO NOT select boring exposition, casual small talk, greetings, or silent scenes. If it's not EPIC or HILARIOUS, skip it.
+4. CONTEXT: The clip must make sense on its own. Start the clip a few seconds BEFORE the main quote so there is build-up.
+5. ACCURACY: You MUST use the exact timestamps provided in the transcript. DO NOT invent numbers.
 
-Return ONLY a valid JSON object. No markdown, no explanations outside the JSON. Format exactly like this:
+Output ONLY a JSON object in this exact format, with no extra text:
 {{
   "highlights": [
     {{
-      "title": "A highly clickable, clickbait-style title",
+      "title": "A highly clickable, hype title for TikTok",
       "start_time": 10.5,
       "end_time": 45.2,
-      "explanation": "Why this will go viral and get high retention"
+      "explanation": "Why this anime moment is epic and will get high retention"
     }}
   ]
 }}
 
-Transcript:
+Anime Transcript:
 {transcript_with_timestamps}
 """
 
