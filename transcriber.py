@@ -71,6 +71,12 @@ def transcribe_video(video_path: str, model_size: str = "large-v3"):
                     })
                     
     print("Transcription complete.")
+    
+    # Explicitly delete the model and clear memory to free VRAM for Ollama
+    del model
+    import gc
+    gc.collect()
+    
     return transcript_text.strip(), words_data
 
 if __name__ == "__main__":

@@ -134,7 +134,7 @@ Anime Transcript:
                 "format": "json",
                 "stream": False,
                 "options": {
-                    "num_ctx": 16384
+                    "num_ctx": 8192
                 }
             },
             timeout=300.0
