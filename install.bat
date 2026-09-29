@@ -19,7 +19,15 @@ pip install -r requirements.txt
 
 echo 4. Setting up Ollama...
 echo Make sure you have Ollama downloaded and installed from ollama.com!
-echo If Ollama is already installed, the program will download the necessary model (Llama 3.1) on first run.
+
+ollama --version >nul 2>&1
+if %errorlevel% equ 0 (
+    echo Ollama detected! Downloading Llama 3.1 model (this is a 4.7GB download and may take a while)...
+    ollama pull llama3.1
+) else (
+    echo [WARNING] Ollama is not installed or not running. 
+    echo Please install it from ollama.com, open a new command prompt, and run: ollama pull llama3.1
+)
 
 echo.
 echo DONE!
