@@ -109,16 +109,21 @@ class App(ctk.CTk):
         # Settings Selection
         self.settings_frame = ctk.CTkFrame(self)
         self.settings_frame.grid(row=5, column=0, padx=20, pady=10, sticky="ew")
-        self.settings_frame.grid_columnconfigure(0, weight=1)
+        self.settings_frame.grid_columnconfigure(1, weight=1)
         
         self.remove_silence_var = ctk.BooleanVar(value=True)
         self.remove_silence_cb = ctk.CTkCheckBox(self.settings_frame, text="Cut scenes without dialogues (Jump Cuts)", variable=self.remove_silence_var)
         self.remove_silence_cb.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
-        # UI Language Switch (Moved from header)
+        # AI Model Selection
+        self.ai_model_var = ctk.StringVar(value="llama3.1")
+        self.ai_model_menu = ctk.CTkOptionMenu(self.settings_frame, values=["llama3.1", "qwen2.5:14b", "gemma2:9b", "mistral"], variable=self.ai_model_var)
+        self.ai_model_menu.grid(row=0, column=1, padx=10, pady=10, sticky="e")
+
+        # UI Language Switch
         self.ui_lang_var = ctk.StringVar(value="EN")
         self.lang_switch = ctk.CTkSegmentedButton(self.settings_frame, values=["EN", "RU"], variable=self.ui_lang_var, command=self.change_language)
-        self.lang_switch.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="w")
+        self.lang_switch.grid(row=1, column=0, columnspan=2, padx=10, pady=(0, 10), sticky="w")
 
         # Status and Run
         self.status_label = ctk.CTkLabel(self, text="Ready. Using Llama 3.1 8B and Whisper GPU.")
@@ -217,6 +222,7 @@ class App(ctk.CTk):
                 music_path = os.path.join(self.music_dir, music_val)
                 
         remove_silence = self.remove_silence_var.get()
+        ai_model = self.ai_model_var.get()
 
         if not video_path:
             err_msg = "Please select a video file." if self.ui_lang_var.get() == "EN" else "Пожалуйста, выберите видеофайл."
@@ -227,15 +233,15 @@ class App(ctk.CTk):
         # Disable button
         if self.ui_lang_var.get() == "RU":
             self.run_btn.configure(state="disabled", text="Обработка... Смотрите консоль.")
-            self.status_label.configure(text="Обработка с помощью ИИ...")
+            self.status_label.configure(text=f"Используется ИИ: {ai_model}...")
         else:
             self.run_btn.configure(state="disabled", text="Processing... Check console.")
-            self.status_label.configure(text="Processing with AI...")
+            self.status_label.configure(text=f"Using AI: {ai_model}...")
 
         # Run in thread so GUI doesn't freeze
-        threading.Thread(target=self.run_process_thread, args=(video_path, out_path, logo_path, music_path, remove_silence), daemon=True).start()
+        threading.Thread(target=self.run_process_thread, args=(video_path, out_path, logo_path, music_path, remove_silence, ai_model), daemon=True).start()
 
-    def run_process_thread(self, video_path, out_path, logo_path, music_path, remove_silence):
+    def run_process_thread(self, video_path, out_path, logo_path, music_path, remove_silence, ai_model):
         class StdoutRedirector:
             def __init__(self, app):
                 self.app = app
@@ -251,7 +257,7 @@ class App(ctk.CTk):
         sys.stdout = StdoutRedirector(self)
         
         try:
-            process_video(video_path, out_path, logo_path=logo_path, music_path=music_path, remove_silence=remove_silence)
+            process_video(video_path, out_path, logo_path=logo_path, music_path=music_path, remove_silence=remove_silence, ai_model=ai_model)
             
             if self.ui_lang_var.get() == "RU":
                 messagebox.showinfo("Успех", "Видео успешно созданы. Проверьте папку вывода.")

@@ -77,10 +77,10 @@ def snap_to_sentence_boundaries(start_t: float, end_t: float, words_data: List[d
     
     return snapped_start, snapped_end
 
-def find_highlights(words_data: List[dict]) -> List[dict]:
+def find_highlights(words_data: List[dict], model_name: str = "llama3.1") -> List[dict]:
     """
     Uses local Ollama API to analyze the transcript without needing an API key.
-    Requires Ollama to be running with the 'llama3.1' model.
+    Requires Ollama to be running with the specified model.
     """
     transcript_with_timestamps = prepare_transcript_for_llm(words_data)
     
@@ -90,27 +90,31 @@ def find_highlights(words_data: List[dict]) -> List[dict]:
         return []
         
     prompt = f"""
-You are an expert anime editor for TikTok and YouTube Shorts.
-Your goal is to find the most EPIC, deep, or highly emotional scenes from the following anime episode transcript. 
-We want scenes that have a strong "hook" and a satisfying setup that makes the viewer want to watch the next TikTok or the anime itself.
-Look for deep quotes, intense arguments, major reveals, or dramatic cliffhangers.
+You are a genius-level viral video editor for TikTok, Shorts, and Reels. 
+Your goal is to extract the absolute BEST, most engaging, and viral segments from the provided video transcript.
 The transcript contains timestamp markers (e.g., [10.5s]).
-Find between 3 and 6 distinct highlights. It is very important that you find at least 3!
 
-STRICT RULES FOR HIGHLIGHTS:
-1. Each highlight MUST be between 20 and 60 seconds long. NEVER exceed 60 seconds! TikToks must be short!
-2. Do NOT select scenes with very little dialogue or empty descriptions. Focus ONLY on dense, engaging dialogue, epic quotes, and intense interactions.
-3. You MUST ONLY return the exact moments present in the text, using the provided timestamps. Do not invent new timestamps.
-4. Try to end the clip on a dramatic cliffhanger, a deep quote, or a punchline.
+What makes a segment viral?
+- A powerful "hook" in the first 3 seconds (a controversial statement, a loud reaction, a crazy reveal, or an emotional peak).
+- High tension, intense arguments, deep philosophical quotes, or extremely funny/awkward moments.
+- A satisfying conclusion or a dramatic cliffhanger that makes people want to watch it again or argue in the comments.
 
-Return ONLY a valid JSON object without any markdown wrapping. It must exactly match this format:
+Find exactly 3 to 6 distinct viral highlights.
+
+STRICT RULES:
+1. LENGTH: Each highlight MUST be between 25 and 60 seconds long. TikToks need enough time to build context, but must not exceed 1 minute.
+2. CONTENT: Focus ONLY on segments with dense, engaging dialogue. Avoid segments that are mostly silence or boring exposition.
+3. CONTEXT: The clip must make sense on its own. Start the clip slightly before the main action so the viewer understands what's happening.
+4. ACCURACY: You MUST ONLY return the exact moments present in the text. DO NOT invent timestamps.
+
+Return ONLY a valid JSON object. No markdown, no explanations outside the JSON. Format exactly like this:
 {{
   "highlights": [
     {{
-      "title": "A catchy title for the clip",
+      "title": "A highly clickable, clickbait-style title",
       "start_time": 10.5,
       "end_time": 45.2,
-      "explanation": "Why this is viral"
+      "explanation": "Why this will go viral and get high retention"
     }}
   ]
 }}
@@ -119,13 +123,13 @@ Transcript:
 {transcript_with_timestamps}
 """
 
-    print("Analyzing transcript with local Ollama AI to find highlights...")
+    print(f"Analyzing transcript with local Ollama AI ({model_name}) to find highlights...")
     
     try:
         response = httpx.post(
             "http://localhost:11434/api/generate",
             json={
-                "model": "llama3.1",
+                "model": model_name,
                 "prompt": prompt,
                 "format": "json",
                 "stream": False,

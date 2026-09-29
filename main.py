@@ -45,7 +45,7 @@ def get_subclips(words_data: list, start_time: float, end_time: float, max_silen
         
     return valid_subclips
 
-def process_video(video_path: str, output_dir: str, logo_path: str = None, music_path: str = None, remove_silence: bool = True):
+def process_video(video_path: str, output_dir: str, logo_path: str = None, music_path: str = None, remove_silence: bool = True, ai_model: str = "llama3.1"):
     print("\n=======================================================")
     print("        ANIBAZA TIKTOK AI VIDEO GENERATOR        ")
     print("        Created exclusively for the AniBaza team       ")
@@ -57,7 +57,7 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     
     # 2. Analyze (Find highlights)
     print("\n--- Step 2: AI Analysis ---")
-    highlights = find_highlights(words_data)
+    highlights = find_highlights(words_data, model_name=ai_model)
     
     if not highlights:
         print("No highlights found by AI.")
