@@ -175,8 +175,8 @@ def _store_token(r: requests.Response) -> dict:
     return tok
 
 
-def get_token(key: str, secret: str, force_login: bool = False) -> dict:
-    """Saved token, refreshed if expired; logs in again when the refresh token is dead."""
+def get_token(key: str, secret: str, force_login: bool = False, interactive: bool = True) -> dict:
+    """Saved token, refreshed if expired; logs in again (interactive) when the refresh token is dead."""
     tok = {} if force_login else _read_json(TOKEN_FILE)
     if tok and time.time() < tok.get("expires_at", 0):
         return tok
@@ -191,6 +191,8 @@ def get_token(key: str, secret: str, force_login: bool = False) -> dict:
             return _store_token(r)
         except TikTokError as e:
             print(f"Токен не обновился ({e}), нужен новый вход.")
+    if not interactive:
+        raise TikTokError("login_needed", "войди в TikTok заново")
     return login(key, secret)
 
 

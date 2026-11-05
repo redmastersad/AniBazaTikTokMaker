@@ -3,7 +3,8 @@
 
 const S = {
   screen: 'new', settings: null, presets: {}, builtin: [], fonts: [], logos: [], music: [], categories: [],
-  channel: null, system: null, prog: { running: false, paused: false, jobs: [], uploads: { items: [] } },
+  channel: null, system: null, prog: { running: false, paused: false, jobs: [], uploads: { items: [] }, tiktok: { items: [] } },
+  tt: null, ttFocus: false, ttKeys: false,
   log: [], logSeq: 0, clips: [], clipsDir: '', clipSel: new Set(), clipFilter: 'all', clipsDone: -1,
   layer: 'subs', safe: 'tiktok', loadedFonts: new Set(), logoUri: {}, upFocus: false,
 };
@@ -178,7 +179,7 @@ function go(screen) {
   S.screen = screen;
   $$('.nav').forEach(n => n.classList.toggle('on', n.dataset.s === screen));
   $$('.main').forEach(m => m.classList.toggle('on', m.id === 's-' + screen));
-  ({ new: renderNew, style: renderStyle, run: renderRun, clips: loadClips, up: renderUp, settings: renderSettings })[screen]();
+  ({ new: renderNew, style: renderStyle, run: renderRun, clips: loadClips, up: renderUp, tt: renderTT, settings: renderSettings })[screen]();
 }
 $$('.nav').forEach(n => n.onclick = () => go(n.dataset.s));
 
@@ -198,6 +199,8 @@ function renderBadges() {
   $('#bClips').textContent = S.clips.length || '';
   const u = (S.prog.uploads.items || []).filter(x => x.status === 'queued' || x.status === 'running').length;
   $('#bUp').textContent = u || '';
+  const tq = ((S.prog.tiktok || {}).items || []).filter(x => ['queued', 'running', 'download'].includes(x.status)).length;
+  $('#bTT').textContent = tq || '';
 }
 
 /* ------------------------------------------------------------------ NEW */
@@ -421,11 +424,12 @@ function renderClips() {
     <button class="btn sm" data-act="selall">${list.length && list.every(c => S.clipSel.has(c.file)) ? 'Снять все' : 'Выбрать все'}</button>
     <button class="btn sm" data-act="openfolder">📂 Открыть папку</button>
     <button class="btn sm danger" data-act="delclips" ${sel.length ? '' : 'disabled'}>🗑 Удалить</button>
-    <button class="btn p sm" data-act="publish" ${sel.length ? '' : 'disabled'}>▲ Опубликовать ${sel.length || ''}</button></div>
+    <button class="btn sm" data-act="totiktok" ${sel.length ? '' : 'disabled'}>♪ В TikTok ${sel.length || ''}</button>
+    <button class="btn p sm" data-act="publish" ${sel.length ? '' : 'disabled'}>▲ YouTube ${sel.length || ''}</button></div>
   ${list.length ? `<div class="scroll" style="flex:1"><div class="clips">${list.map(c => `
     <div class="clip ${S.clipSel.has(c.file) ? 'sel' : ''}" data-clip="${esc(c.file)}">
       <div class="ph" style="${c.thumb ? `background-image:url(${c.thumb})` : ''}"><i class="ck ${S.clipSel.has(c.file) ? 'on' : ''}" data-ck="${esc(c.file)}"></i><span class="dur">${fmtT(c.duration)}</span>
-        ${c.upload ? `<span class="upb pill ${c.upload === 'done' ? 'g' : c.upload === 'error' ? 'r' : 'p'}">${{ done: 'на YouTube', error: 'ошибка заливки', queued: 'в очереди', running: 'заливается' }[c.upload]}</span>` : ''}<div class="play">▶</div></div>
+        ${c.upload ? `<span class="upb pill ${c.upload === 'done' ? 'g' : c.upload === 'error' ? 'r' : 'p'}">${{ done: 'на YouTube', error: 'ошибка заливки', queued: 'в очереди', running: 'заливается' }[c.upload]}</span>` : ''}${c.tiktok ? `<span class="pill ${c.tiktok === 'done' ? 'g' : c.tiktok === 'error' ? 'r' : 'p'}" style="position:absolute;bottom:10px;right:10px;z-index:3">${{ done: 'в TikTok', error: 'TikTok: ошибка', queued: 'TikTok: очередь', running: 'TikTok…', download: 'TikTok…' }[c.tiktok]}</span>` : ''}<div class="play">▶</div></div>
       <div class="info"><b title="${esc(c.why || '')}">${esc(c.title)}</b><span class="score">${stars(c.score)} ${esc(catLabel(c.category))}</span></div></div>`).join('')}</div></div>`
     : `<div class="card empty"><b>Клипов пока нет</b><div>Готовые шортсы появятся здесь сразу после монтажа.</div></div>`}`;
 }
@@ -466,6 +470,107 @@ function renderUp(force) {
   </div>`;
 }
 
+/* ------------------------------------------------------------------ TIKTOK */
+const TT_PRIV = { PUBLIC_TO_EVERYONE: 'Все', MUTUAL_FOLLOW_FRIENDS: 'Друзья', FOLLOWER_OF_CREATOR: 'Подписчики', SELF_ONLY: 'Только я' };
+async function loadTT(refresh) {
+  S.tt = await api().tt_account(!!refresh);
+  S.ttKeys = S.ttKeys && !S.tt.keys;
+  if (S.screen === 'tt') renderTT(true);
+}
+function renderTT(force) {
+  if (S.screen !== 'tt') return;
+  if (!S.tt) { $('#s-tt').innerHTML = `<div class="head"><div><h1>TikTok</h1><div class="sub">Загружаю…</div></div></div>`; loadTT(); return; }
+  if (!force && S.ttFocus) return;
+  const q = S.prog.tiktok || { items: [] }, items = q.items || [], a = S.tt, ts = S.settings.tiktok;
+  const active = items.filter(i => ['queued', 'running', 'download'].includes(i.status)).length;
+  const pill = it => it.status === 'done' ? `<span class="pill g">${esc(it.detail || 'готово')}</span>`
+    : it.status === 'running' || it.status === 'download' ? `<span class="pill p">${esc(it.detail || 'загрузка')}</span>`
+      : it.status === 'error' ? `<span class="pill r" title="${esc(it.detail)}">ошибка</span>` : '<span class="pill m">в очереди</span>';
+  const src = { gdrive: 'Google Диск', clips: 'клип', folder: 'файл' };
+  const acc = !a.keys || S.ttKeys ? `
+      <div class="hint" style="margin-bottom:8px">Вставь ключи приложения с developers.tiktok.com (Sandbox → App details). Они хранятся только на этом компьютере.</div>
+      <input class="inp" id="ttKey" placeholder="Client key" style="margin-bottom:8px"><input class="inp" id="ttSecret" placeholder="Client secret" type="password" style="margin-bottom:10px">
+      <div style="display:flex;gap:8px;justify-content:flex-end">${a.keys ? '<button class="btn sm" data-act="ttkeyscancel">Отмена</button>' : ''}<button class="btn p sm" data-act="ttkeys">Сохранить ключи</button></div>`
+    : !a.logged ? `<div style="display:flex;align-items:center;gap:12px"><div class="acc">?</div><div style="flex:1"><b>Не подключён</b><div class="mute small">${esc(a.error || 'войди один раз через браузер')}</div></div><button class="btn p sm" data-act="ttlogin">Войти</button></div>`
+      : `<div style="display:flex;align-items:center;gap:12px"><div class="acc" ${a.avatar ? `style="background:url(${esc(a.avatar)}) center/cover"` : ''}>${a.avatar ? '' : esc((a.nickname || '?')[0])}</div>
+        <div style="flex:1;min-width:0"><b>${esc(a.nickname || 'TikTok')}</b><div class="mute small">${a.error ? esc(a.error) : `<span class="dot"></span>@${esc(a.username || '')}`}</div></div>
+        <button class="btn sm" data-act="ttlogin">Сменить</button></div>
+        <div style="display:flex;gap:12px;margin-top:10px"><span class="var small" data-act="ttkeysedit">ключи приложения</span><span class="var small" data-act="ttrefresh">обновить</span></div>`;
+  const opts = a.privacy_options || [];
+  $('#s-tt').innerHTML = `
+  <div class="head"><div><h1>TikTok</h1><div class="sub">${esc(q.note || 'Видео заливаются в TikTok по очереди через официальный API')}</div></div>
+    <div style="display:flex;gap:10px"><button class="btn" data-act="ttclear">Убрать готовые</button>
+      ${q.running ? '<button class="btn" data-act="ttstop">❚❚ Стоп после текущего</button>' : `<button class="btn p" data-act="ttstart" ${active && a.logged && (ts.mode !== 'post' || ts.privacy) ? '' : 'disabled'}>▲ Запустить очередь</button>`}</div></div>
+  <div style="display:grid;grid-template-columns:1fr 400px;gap:18px;flex:1;min-height:0">
+    <div class="card scroll">
+      <div class="up" style="padding:14px 16px"><span class="sec" style="margin:0">Подпись</span><span class="sec" style="margin:0">Статус</span><span></span></div>
+      ${items.length ? items.map(it => `<div class="up">
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><textarea rows="2" data-ttf="caption" data-id="${it.id}" ${['running', 'download', 'done'].includes(it.status) ? 'disabled' : ''} maxlength="2200">${esc(it.caption)}</textarea>
+          <div class="mute small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(it.path)}">${esc(src[it.source] || '')} · ${esc(it.file)}${it.status === 'error' ? ' · <span style="color:#ff7a7a">' + esc(it.detail) + '</span>' : ''}</div>
+          ${it.status === 'running' ? `<div class="bar"><i style="width:${Math.round((it.progress || 0) * 100)}%"></i></div>` : ''}</div>
+        <div>${pill(it)}</div>
+        <div style="display:flex;gap:6px;justify-content:flex-end">${it.status === 'error' ? `<button class="btn sm" data-ttretry="${it.id}" title="${esc(it.detail)}">↻</button>` : ''}${!['running', 'download'].includes(it.status) ? `<button class="btn sm ghost" data-ttrm="${it.id}" title="Убрать">×</button>` : ''}</div>
+      </div>`).join('') : `<div class="empty"><b>Очередь пустая</b><div>Добавь папку, ссылку на Google Диск или отметь клипы в «Готовых клипах» → «В TikTok».</div></div>`}
+    </div>
+    <div class="scroll" style="display:flex;flex-direction:column;gap:14px;min-height:0">
+      <div class="card" style="padding:18px"><div class="sec">Аккаунт TikTok</div>${acc}</div>
+      <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="sec">Добавить видео</div>
+        <div style="display:flex;gap:8px"><button class="btn sm" data-act="ttfolder" style="flex:1">📂 Папка</button><button class="btn sm" data-act="ttfiles" style="flex:1">🎞 Файлы</button><button class="btn sm" data-act="goclips" style="flex:1">Готовые клипы</button></div>
+        <div class="kv" style="margin-top:4px"><span>Ссылка на папку Google Диска</span></div>
+        <div style="display:flex;gap:8px"><input class="inp" id="ttGd" placeholder="https://drive.google.com/drive/folders/…"><button class="btn p sm" data-act="ttgdrive">Залить</button></div>
+        <div class="hint">Папка должна быть открыта «всем, у кого есть ссылка». Видео пойдут по порядку имён: 01, 02, 03…</div></div>
+      <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="sec">Как публиковать</div>
+        <div class="seg">${[['draft', 'В черновики TikTok'], ['post', 'Сразу опубликовать']].map(([v, l]) => `<span class="${ts.mode === v ? 'on' : ''}" data-ttmode="${v}">${l}</span>`).join('')}</div>
+        <div class="hint">${ts.mode === 'draft' ? 'Видео придёт в TikTok на телефоне (входящие), там добавишь звук и опубликуешь. TikTok держит не больше 5 неопубликованных черновиков за сутки.' : 'Пока TikTok не проверил приложение, можно только «Только я» и только с приватного аккаунта. Около 15 постов в день.'}</div>
+        ${ts.mode === 'post' ? `<div class="kv"><span>Кто увидит</span></div>
+          <div class="seg" style="flex-wrap:wrap">${(opts.length ? opts : ['SELF_ONLY']).map(o => `<span class="${ts.privacy === o ? 'on' : ''}" data-ttpriv="${o}">${TT_PRIV[o] || o}</span>`).join('')}</div>
+          ${ts.privacy ? '' : '<div class="hint" style="color:#ff7a7a">Выбери, кто увидит видео</div>'}
+          <div class="row"><span>Комментарии</span><i class="tg ${ts.allow_comments && !a.comment_disabled ? 'on' : ''}" data-act="ttcomments"></i></div>
+          <div class="hint">Публикуя, ты соглашаешься с <span class="var" data-link="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en">Music Usage Confirmation</span> TikTok.</div>` : ''}
+        <div class="kv" style="margin-top:4px"><span>Подпись для новых видео</span></div><textarea rows="3" data-tttpl="caption_tpl">${esc(ts.caption_tpl)}</textarea>
+        <div class="hint">Подставляется: <span class="var" data-ttvar="{название}">{название}</span> (заголовок от ИИ или имя файла), <span class="var" data-ttvar="{тайтл}">{тайтл}</span>, <span class="var" data-ttvar="{серия}">{серия}</span>. Файл .txt рядом с видео заменяет подпись целиком.</div>
+        <div class="row"><span>Пауза между видео</span><select data-ttpause>${[15, 20, 30, 60, 120, 300].map(v => `<option value="${v}" ${+ts.pause === v ? 'selected' : ''}>${v < 60 ? v + ' с' : v / 60 + ' мин'}</option>`).join('')}</select></div>
+      </div>
+    </div>
+  </div>`;
+}
+async function ttAction(a) {
+  if (a === 'ttkeys') {
+    const k = $('#ttKey').value.trim(), s = $('#ttSecret').value.trim();
+    const r = await api().tt_save_keys(k, s); if (r.error) return toast(r.error);
+    S.tt = r; S.ttKeys = false; renderTT(true); toast('Ключи сохранены, теперь войди'); return true;
+  }
+  if (a === 'ttkeysedit') { S.ttKeys = true; renderTT(true); return true; }
+  if (a === 'ttkeyscancel') { S.ttKeys = false; renderTT(true); return true; }
+  if (a === 'ttrefresh') { await loadTT(true); return true; }
+  if (a === 'ttlogin') {
+    toast('Открываю браузер: войди в TikTok и разреши доступ');
+    const r = await api().tt_login(); if (r.error) toast(r.error); else toast('TikTok подключён');
+    S.tt = r.error ? await api().tt_account(true) : r; renderTT(true); poll(); return true;
+  }
+  if (a === 'ttfolder' || a === 'ttfiles') {
+    const n = await (a === 'ttfolder' ? api().tt_add_folder(false) : api().tt_add_files(false));
+    if (n === null) return true;
+    toast(n ? `Добавлено ${n} ${plural(n, 'видео', 'видео', 'видео')}` : 'Новых видео нет (уже в очереди или залиты)'); await poll(); renderTT(true); return true;
+  }
+  if (a === 'goclips') { go('clips'); return true; }
+  if (a === 'ttgdrive') {
+    const url = $('#ttGd').value.trim(); if (!url) return toast('Вставь ссылку');
+    const r = await api().tt_add_gdrive(url); toast(r.error || 'Читаю Google Диск…'); return true;
+  }
+  if (a === 'ttstart') { await api().tt_start(); await poll(); return true; }
+  if (a === 'ttstop') { await api().tt_stop(); toast('Остановлю после текущего видео'); return true; }
+  if (a === 'ttclear') { await api().tt_clear_done(); await poll(); renderTT(true); return true; }
+  if (a === 'ttcomments') { S.settings.tiktok.allow_comments = !S.settings.tiktok.allow_comments; save(); renderTT(true); return true; }
+  if (a === 'totiktok') {
+    if (!S.tt) S.tt = await api().tt_account(false);
+    const n = await api().tt_add_clips([...S.clipSel], !!S.tt.logged); S.clipSel.clear(); await poll();
+    if (!S.tt.logged) toast('Клипы в очереди. Подключи TikTok и запусти'); else toast(n ? `В TikTok: ${n}` : 'Эти клипы уже в очереди');
+    go('tt'); return true;
+  }
+  return false;
+}
+
 /* ------------------------------------------------------------------ SETTINGS */
 function renderSettings() {
   const st = S.settings, o = (S.system && S.system.ollama) || {}, g = S.system && S.system.gpu;
@@ -492,6 +597,7 @@ function renderSettings() {
 document.addEventListener('click', async e => {
   const t = e.target;
   const act = t.closest('[data-act]'); const a = act && act.dataset.act;
+  if (a && a.startsWith('tt') || a === 'goclips' || a === 'totiktok') { if (await ttAction(a)) return; }
   if (a === 'pick') { const n = await api().pick_videos(); if (n) toast(`Добавлено: ${n}`); return poll(); }
   if (a === 'start') {
     const ok = await api().start(S.settings);
@@ -559,6 +665,12 @@ document.addEventListener('click', async e => {
   if ((el = t.closest('[data-ck]'))) { e.stopPropagation(); const f = el.dataset.ck; S.clipSel.has(f) ? S.clipSel.delete(f) : S.clipSel.add(f); return renderClips(); }
   if ((el = t.closest('[data-clip]'))) { return api().open_clip(el.dataset.clip); }
   if ((el = t.closest('[data-cf]'))) { S.clipFilter = el.dataset.cf; return renderClips(); }
+  if ((el = t.closest('[data-link]'))) { e.stopPropagation(); return api().open_url(el.dataset.link); }
+  if ((el = t.closest('[data-ttretry]'))) { await api().tt_update(el.dataset.ttretry, { retry: true }); return poll(); }
+  if ((el = t.closest('[data-ttrm]'))) { await api().tt_remove(el.dataset.ttrm); await poll(); return renderTT(true); }
+  if ((el = t.closest('[data-ttmode]'))) { S.settings.tiktok.mode = el.dataset.ttmode; save(); if (el.dataset.ttmode === 'post' && S.tt && S.tt.logged) loadTT(true); return renderTT(true); }
+  if ((el = t.closest('[data-ttpriv]'))) { S.settings.tiktok.privacy = el.dataset.ttpriv; save(); return renderTT(true); }
+  if ((el = t.closest('[data-ttvar]'))) { const ta = $('[data-tttpl]'); ta.value += ' ' + el.dataset.ttvar; S.settings.tiktok.caption_tpl = ta.value; return save(); }
   if ((el = t.closest('[data-retry]'))) { await api().upload_update(el.dataset.retry, { retry: true }); return poll(); }
   if ((el = t.closest('[data-uprm]'))) { await api().upload_remove(el.dataset.uprm); return poll(); }
   if ((el = t.closest('[data-vis2]'))) { S.settings.upload.visibility = el.dataset.vis2; save(); return renderUp(true); }
@@ -629,22 +741,25 @@ document.addEventListener('input', e => {
   }
   if (t.dataset.stycolor) { setStyle(S.layer, t.dataset.stycolor, t.value); return renderPresets(); }
   if (t.dataset.tpl) { S.settings.upload[t.dataset.tpl] = t.value; return save(); }
+  if (t.dataset.tttpl) { S.settings.tiktok.caption_tpl = t.value; return save(); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.set === 'preset') { if (t.value) applyPreset(t.value); return; }
   if (t.dataset.set) { set(t.dataset.set, t.value); renderSys(); return; }
   if (t.dataset.upf) { api().upload_update(t.dataset.id, { [t.dataset.upf]: t.value }); }
+  if (t.dataset.ttf) { api().tt_update(t.dataset.id, { [t.dataset.ttf]: t.value }); }
+  if (t.hasAttribute('data-ttpause')) { S.settings.tiktok.pause = +t.value; save(); }
 });
-document.addEventListener('focusin', e => { if (e.target.closest('#s-up')) S.upFocus = true; });
-document.addEventListener('focusout', e => { if (e.target.closest('#s-up')) { S.upFocus = false; } });
+document.addEventListener('focusin', e => { if (e.target.closest('#s-up')) S.upFocus = true; if (e.target.closest('#s-tt')) S.ttFocus = true; });
+document.addEventListener('focusout', e => { if (e.target.closest('#s-up')) { S.upFocus = false; } if (e.target.closest('#s-tt')) { S.ttFocus = false; } });
 window.addEventListener('resize', () => { if (S.screen === 'style') refreshPreviews(); });
 // let Python receive dropped files anywhere in the window
 document.addEventListener('dragover', e => e.preventDefault());
 document.addEventListener('drop', e => { e.preventDefault(); setTimeout(poll, 400); setTimeout(poll, 1500); });
 
 /* ------------------------------------------------------------------ polling */
-let lastJobsSig = '', lastUpSig = '';
+let lastJobsSig = '', lastUpSig = '', lastTTSig = '', lastTTStat = '';
 async function poll() {
   try {
     const p = await api().progress(S.logSeq);
@@ -659,6 +774,10 @@ async function poll() {
     const usig = JSON.stringify(p.uploads);
     if (S.screen === 'up' && usig !== lastUpSig) renderUp();
     lastUpSig = usig;
+    const tsig = JSON.stringify(p.tiktok), tstat = JSON.stringify(((p.tiktok || {}).items || []).map(i => [i.path, i.status]));
+    if (tsig !== lastTTSig && S.screen === 'tt') renderTT();
+    if (tstat !== lastTTStat && lastTTStat && S.screen === 'clips' && S.clips.length) loadClips();
+    lastTTSig = tsig; lastTTStat = tstat;
     renderBadges();
   } catch (e) { console.warn(e); }
 }

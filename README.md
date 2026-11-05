@@ -53,7 +53,10 @@ Launch `run_tiktok_ai.bat`. The window has six sections:
 
 The previous simple window is still available via `run_old_gui.bat`.
 
-**Method 3 (TikTok upload from a folder, official API):**
+**TikTok section in the window (official API):**
+The «TikTok» section of `run_tiktok_ai.bat` connects the TikTok account (Client key/secret + sign-in in the browser), takes videos from a folder, from «Готовые клипы» («♪ В TikTok») or from a shared Google Drive folder link (downloaded one by one in file-name order, deleted after upload) and sends them to TikTok one by one, as drafts or direct posts. Google Drive support installs `gdown` on first use.
+
+**Method 3 (TikTok upload from a folder, console):**
 `run_tiktok_upload.bat` uploads every `.mp4/.mov/.webm` from a folder to TikTok through the Content Posting API (no browser robot). Drag the folder onto the .bat or type its path. Uploaded videos move to the `Залито в TikTok` subfolder, so the next run only takes new ones; a log is kept in `tiktok_upload_log.txt`.
 - Mode 1 sends videos to TikTok drafts (finish them in the TikTok app); mode 2 posts directly with the chosen privacy.
 - Caption: `<video>.txt` next to the video, else the AI title from `clips.json`, else the file name, through a template with `{название}`, `{тайтл}`, `{серия}` and hashtags.
