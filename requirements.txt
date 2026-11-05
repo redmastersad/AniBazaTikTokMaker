@@ -86,4 +86,3 @@ typing_extensions==4.16.0
 uritemplate==4.2.0
 urllib3==2.8.0
 yarl==1.25.1
-pywebview>=5.3

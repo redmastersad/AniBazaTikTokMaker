@@ -76,7 +76,11 @@ LOG = LogTee(sys.stdout)
 sys.stdout = LOG
 sys.stderr = LOG
 
-import webview  # noqa: E402
+try:
+    import webview  # noqa: E402
+except Exception as _e:  # pywebview missing or broken -> open the UI in Edge/browser instead
+    webview = None
+    print(f"pywebview недоступен ({_e}), открываю окно через браузер")
 
 import style as style_mod  # noqa: E402
 from analyzer import CATEGORIES, DEFAULT_CATEGORIES  # noqa: E402
@@ -533,6 +537,8 @@ class Api:
 
     # --- dialogs
     def _dialog(self, kind, types=(), multiple=False):
+        if webview is None or self._window is None:
+            return _tk_dialog(kind, types, multiple)
         kind = {"open": getattr(getattr(webview, "FileDialog", None), "OPEN", None) or webview.OPEN_DIALOG,
                 "folder": getattr(getattr(webview, "FileDialog", None), "FOLDER", None) or webview.FOLDER_DIALOG}[kind]
         w = self._window
@@ -713,6 +719,36 @@ class Api:
         self._uploads.clear_done()
 
 
+_TK_LOCK = threading.Lock()
+
+
+def _tk_dialog(kind, types=(), multiple=False):
+    """File dialogs for browser mode (no pywebview): plain Windows dialogs via tkinter."""
+    import re
+    import tkinter as tk
+    from tkinter import filedialog
+    filetypes = []
+    for t in types:
+        m = re.match(r"^(.*?)\s*\((.*)\)$", t)
+        if m:
+            filetypes.append((m.group(1), " ".join(m.group(2).split(";"))))
+    with _TK_LOCK:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        try:
+            if kind == "folder":
+                res = filedialog.askdirectory(parent=root)
+                return [res] if res else []
+            if multiple:
+                res = filedialog.askopenfilenames(parent=root, filetypes=filetypes or [("Все файлы", "*.*")])
+                return [os.path.normpath(p) for p in res] if res else []
+            res = filedialog.askopenfilename(parent=root, filetypes=filetypes or [("Все файлы", "*.*")])
+            return [os.path.normpath(res)] if res else []
+        finally:
+            root.destroy()
+
+
 def _bind_drop(window, api):
     """Drag & drop of video files from Explorer onto the window."""
     try:
@@ -730,8 +766,99 @@ def _bind_drop(window, api):
         print(f"Drag & drop unavailable: {e}")
 
 
+def _find_edge():
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"), os.environ.get("LOCALAPPDATA")):
+        if base:
+            p = os.path.join(base, "Microsoft", "Edge", "Application", "msedge.exe")
+            if os.path.exists(p):
+                return p
+    return None
+
+
+def run_browser_mode(api, port=0):
+    """Serves ui/ and the Api over HTTP on 127.0.0.1 and opens it in an Edge app window (or the default browser).
+    Exits when the page stops polling for a while (window closed)."""
+    import secrets
+    import webbrowser
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    token = secrets.token_hex(16)
+    ui_dir = os.path.join(APP_DIR, "ui")
+    last_seen = {"t": time.time(), "connected": False}
+
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *a, **k):
+            super().__init__(*a, directory=ui_dir, **k)
+
+        def log_message(self, *a):
+            pass
+
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
+        def do_POST(self):
+            name = self.path.split("?")[0].rsplit("/", 1)[-1]
+            # custom header -> other web pages can't call us (CORS preflight is never answered)
+            if self.headers.get("X-Studio-Token") != token or name.startswith("_") or not callable(getattr(api, name, None)):
+                self.send_error(403)
+                return
+            last_seen["t"] = time.time()
+            last_seen["connected"] = True
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                args = json.loads(self.rfile.read(length) or b"[]")
+                res = getattr(api, name)(*args)
+                body = json.dumps(res, ensure_ascii=False).encode("utf-8")
+            except Exception as e:
+                traceback.print_exc()
+                body = json.dumps({"error": str(e)}, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    url = f"http://127.0.0.1:{server.server_address[1]}/index.html?bridge={token}"
+    print(f"Окно открыто в браузере: {url.split('?')[0]}")
+    edge = _find_edge()
+    if edge:
+        subprocess.Popen([edge, f"--app={url}", "--window-size=1380,880",
+                          f"--user-data-dir={os.path.join(APP_DIR, '_webview', 'edge')}"])
+    else:
+        webbrowser.open(url)
+
+    def watchdog():
+        while True:
+            time.sleep(5)
+            idle = time.time() - last_seen["t"]
+            if (last_seen["connected"] and idle > 20) or (not last_seen["connected"] and idle > 180):
+                print("Окно закрыто, выхожу")
+                if api._jobs.running:
+                    api.cancel()
+                    time.sleep(2)
+                os._exit(0)
+
+    threading.Thread(target=watchdog, daemon=True).start()
+    server.serve_forever()
+
+
+def _fatal(msg):
+    print(msg)
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, msg[-1500:], "AniBaza TikTok Studio", 0x10)
+        except Exception:
+            pass
+
+
 def main():
     api = Api()
+    if webview is None or "--browser" in sys.argv:
+        run_browser_mode(api)
+        return
     window = webview.create_window(
         "AniBaza TikTok Studio", url=os.path.join(APP_DIR, "ui", "index.html"), js_api=api,
         width=1380, height=880, min_size=(1120, 720), background_color="#0b0b10")
@@ -741,4 +868,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        _fatal("Не удалось запустить программу:\n\n" + traceback.format_exc() + "\nПодробности в app.log")
+        if webview is not None and "--browser" not in sys.argv:
+            # the native window failed (e.g. no WebView2) -> try the browser window
+            try:
+                run_browser_mode(Api())
+            except Exception:
+                traceback.print_exc()
