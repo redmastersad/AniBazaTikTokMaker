@@ -233,14 +233,12 @@ class Client:
 
     @staticmethod
     def _source_info(size: int) -> dict:
-        if size < MIN_CHUNK:
-            chunk, count = size, 1
-        else:
-            chunk = min(CHUNK, size)
-            count = size // chunk
-            if size - chunk * (count - 1) > 128 * MB:   # never happens with 10 MB chunks, kept for safety
-                count += 1
-        return {"source": "FILE_UPLOAD", "video_size": size, "chunk_size": chunk, "total_chunk_count": count}
+        # Up to 64 MB TikTok wants ONE chunk equal to the whole file (chunk_size == video_size):
+        # a single chunk bigger than chunk_size is rejected with «The chunk size is invalid».
+        if size <= 64_000_000:
+            return {"source": "FILE_UPLOAD", "video_size": size, "chunk_size": size, "total_chunk_count": 1}
+        count = size // CHUNK            # ≥ 6 here; the last chunk takes the remainder (< 2 × CHUNK)
+        return {"source": "FILE_UPLOAD", "video_size": size, "chunk_size": CHUNK, "total_chunk_count": count}
 
     def init_upload(self, path: str, post_info: dict | None) -> tuple[str, str, dict]:
         """post_info=None → draft into the TikTok inbox; otherwise a direct post."""
@@ -269,6 +267,8 @@ class Client:
                             "Content-Range": f"bytes {first}-{last}/{size}",
                         })
                         if r.status_code in (200, 201, 206):
+                            if i == count - 1 and r.status_code == 206:
+                                raise TikTokError("upload_incomplete", "TikTok ждёт ещё данные, файл не принят целиком")
                             break
                         if r.status_code < 500:
                             raise TikTokError(f"upload_http_{r.status_code}", r.text[:300])
@@ -286,11 +286,14 @@ class Client:
 
     def wait(self, publish_id: str, timeout: int = 600) -> dict:
         """Waits until TikTok has the video (inbox) or posted it. Returns the last status."""
-        end = time.time() + timeout
+        start = time.time()
+        end = start + timeout
         st: dict = {}
         while time.time() < end:
             st = self.status(publish_id)
             s = st.get("status")
+            if s == "PROCESSING_UPLOAD" and time.time() - start > 180:
+                raise TikTokError("upload_stuck", "TikTok так и не принял файл, попробуй ещё раз")
             if s in ("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE"):
                 return st
             if s == "FAILED":
