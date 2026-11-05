@@ -6,6 +6,8 @@ import threading
 
 import ffmpeg
 
+import nowindow  # noqa: F401
+
 from style import FONTS_DIR
 
 
@@ -149,8 +151,17 @@ def grab_frame(video_path: str, out_jpg: str, at: float | None = None, height: i
         return None
 
 
+_DURATIONS: dict = {}
+
+
 def probe_duration(path: str) -> float:
     try:
-        return float(ffmpeg.probe(path)['format'].get('duration', 0) or 0)
-    except Exception:
+        key = (path, os.path.getmtime(path))
+    except OSError:
         return 0.0
+    if key not in _DURATIONS:
+        try:
+            _DURATIONS[key] = float(ffmpeg.probe(path)['format'].get('duration', 0) or 0)
+        except Exception:
+            _DURATIONS[key] = 0.0
+    return _DURATIONS[key]
