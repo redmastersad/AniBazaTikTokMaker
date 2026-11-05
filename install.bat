@@ -17,6 +17,9 @@ call .\venv\Scripts\activate.bat
 echo 3. Installing dependencies (this may take 5-10 minutes)...
 pip install -r requirements.txt
 
+echo 3b. Installing the window component (optional, the app also works in Edge without it)...
+pip install "pywebview>=5.3"
+
 echo 4. Setting up Ollama...
 echo Make sure you have Ollama downloaded and installed from ollama.com!
 

@@ -211,7 +211,7 @@ function renderNew() {
   <div class="grid2">
     <div style="display:flex;flex-direction:column;gap:12px;min-height:0">
       <div class="drop" id="drop"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></div>
-        <div style="flex:1"><b style="font-size:15px">Перетащи серии сюда</b><div class="mute small">MP4, MKV, MOV, AVI, WEBM · можно сразу пачкой</div></div>
+        <div style="flex:1"><b style="font-size:15px">${BRIDGE ? 'Выбери серии' : 'Перетащи серии сюда'}</b><div class="mute small">${BRIDGE ? 'Кнопка справа · можно сразу пачкой' : 'MP4, MKV, MOV, AVI, WEBM · можно сразу пачкой'}</div></div>
         <button class="btn" data-act="pick">Выбрать файлы</button></div>
       <div class="mute small" id="qInfo" style="display:flex;justify-content:space-between"></div>
       <div class="eplist scroll" id="eplist" style="flex:1"></div>
@@ -671,5 +671,17 @@ async function boot() {
   await Promise.all([poll(), pollSys()]);
   go('new');
   setInterval(poll, 700); setInterval(pollSys, 4000);
+}
+const BRIDGE = new URLSearchParams(location.search).get('bridge');
+if (BRIDGE && !window.pywebview) {
+  // browser mode (no pywebview): same Api over HTTP on 127.0.0.1
+  window.pywebview = {
+    api: new Proxy({}, {
+      get: (_, name) => (...args) => fetch('/api/' + name, {
+        method: 'POST', headers: { 'X-Studio-Token': BRIDGE, 'Content-Type': 'application/json' }, body: JSON.stringify(args),
+      }).then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))),
+    }),
+  };
+  document.documentElement.classList.add('browser-mode');
 }
 if (window.pywebview && window.pywebview.api) boot(); else window.addEventListener('pywebviewready', boot);
