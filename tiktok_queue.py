@@ -78,14 +78,22 @@ def _clips_index(folder: str) -> dict:
         return {}
 
 
+def title_from_name(fn: str) -> str:
+    """«20261025_025344_63972dcc_clip_002_Визуальная сцена 12.mp4» → «Визуальная сцена 12»; «001_Успех.mp4» → «Успех»."""
+    t = os.path.splitext(fn)[0]
+    t = re.sub(r"^\d{8}_\d{6}_[0-9a-f]+_clip_\d+_", "", t)
+    t = re.sub(r"^\d{1,4}[_. -]+", "", t)
+    t = re.sub(r"\s*\(\d+\)$", "", t)          # «… (1)» from Drive duplicates
+    return " ".join(t.replace("_", " ").split()) or os.path.splitext(fn)[0]
+
+
 def _entry_for(path: str, index: dict | None = None) -> dict:
     fn = os.path.basename(path)
     if index is None:
         index = _clips_index(os.path.dirname(path))
     e = dict(index.get(fn) or {})
-    e.setdefault("title", os.path.splitext(fn)[0].replace("_", " "))
     if not e.get("title"):
-        e["title"] = os.path.splitext(fn)[0].replace("_", " ")
+        e["title"] = title_from_name(fn)
     txt = os.path.splitext(path)[0] + ".txt"
     if os.path.exists(txt):
         try:
@@ -238,6 +246,8 @@ class TikTokQueue:
             if "/folders/" in url or "folderview" in url:
                 files = gdown.download_folder(url=url, output=dest, quiet=True, skip_download=True)
                 for f in files or []:
+                    if "/" in f.path.replace("\\", "/").strip("/"):
+                        continue            # only the folder itself, not its subfolders (Archive etc.)
                     entries.append((f.id, f.local_path))
             else:
                 m = re.search(r"(?:/d/|id=)([\w-]{20,})", url)
