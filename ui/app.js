@@ -316,7 +316,8 @@ function renderFontList() {
   const L = S.settings.style[S.layer];
   const sample = esc(caseText(S.layer === 'title' ? 'Годзё' : 'Ты ещё', L.case));
   box.innerHTML = S.fonts.map(f => { ensureFont(f.name); return `<div class="font ${f.name === L.font ? 'on' : ''}" data-font="${esc(f.name)}"><span style="font-family:'${esc(f.name)}'">${sample}</span><span class="mute small">${esc(f.name)}${f.cyrillic ? '' : ' · без кириллицы'}</span></div>`; }).join('') +
-    `<button class="btn" data-act="pickfont" style="width:100%;margin-top:4px">＋ Загрузить свой .ttf / .otf</button>
+    `<button class="btn" data-act="sysfonts" style="width:100%;margin-top:4px">🖥 Шрифты Windows</button>
+     <button class="btn" data-act="pickfont" style="width:100%;margin-top:6px">＋ Загрузить свой .ttf / .otf</button>
      <div class="hint" style="margin-top:6px">Шрифт вшивается в ролик сам — ставить его в Windows не нужно</div>`;
 }
 function slider(label, key, val, min, max, step, unit = '') {
@@ -512,6 +513,7 @@ document.addEventListener('click', async e => {
     S.fonts = r.fonts; if (S.layer === 'logo') S.layer = 'subs';
     setStyle(S.layer, 'font', r.name); renderFontList(); toast(`Шрифт «${r.name}» добавлен`); return;
   }
+  if (a === 'sysfonts') return openSystemFonts();
   if (a === 'savepreset') {
     const name = await modal(`<b style="font-size:16px">Сохранить пресет</b><input class="inp" placeholder="Например: Моя озвучка" maxlength="40">
       <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" data-m="no">Отмена</button><button class="btn p" data-m="ok">Сохранить</button></div>`);
@@ -562,6 +564,41 @@ document.addEventListener('click', async e => {
   if ((el = t.closest('[data-vis2]'))) { S.settings.upload.visibility = el.dataset.vis2; save(); return renderUp(true); }
   if ((el = t.closest('[data-var]'))) { const ta = $('[data-tpl="desc_tpl"]'); ta.value += el.dataset.var; S.settings.upload.desc_tpl = ta.value; return save(); }
 });
+async function openSystemFonts() {
+  const body = $('#modalBody');
+  body.style.width = '560px';
+  body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">Шрифты Windows</b><span class="x" data-sf-close>×</span></div>
+    <input class="inp" id="sfSearch" placeholder="Поиск по названию…">
+    <div class="scroll" id="sfList" style="max-height:52vh;display:flex;flex-direction:column;gap:6px"><div class="mute">Ищу шрифты…</div></div>
+    <div class="hint">Выбранный шрифт скопируется в программу и будет вшиваться в ролики.</div>`;
+  $('#modal').classList.add('on');
+  const close = () => { $('#modal').classList.remove('on'); body.style.width = ''; body.onclick = null; };
+  let fonts = [];
+  const draw = () => {
+    const q = $('#sfSearch').value.trim().toLowerCase();
+    const list = fonts.filter(f => !q || f.name.toLowerCase().includes(q)).slice(0, 300);
+    const sample = esc(caseText('Ты ещё не понял?', S.layer === 'logo' ? 'upper' : S.settings.style[S.layer].case));
+    $('#sfList').innerHTML = list.length ? list.map(f => `<div class="font" data-sf="${esc(f.path)}"><span style="font-family:'${esc(f.name)}',sans-serif;font-size:18px">${sample}</span><span class="mute small">${esc(f.name)}${f.cyrillic ? '' : ' · без кириллицы'}</span></div>`).join('')
+      : '<div class="mute">Ничего не нашлось</div>';
+  };
+  body.onclick = async e => {
+    if (e.target.closest('[data-sf-close]')) return close();
+    const el = e.target.closest('[data-sf]'); if (!el) return;
+    el.style.opacity = .5;
+    const r = await api().add_system_font(el.dataset.sf);
+    if (r.error) { el.style.opacity = 1; return toast(r.error); }
+    close();
+    S.fonts = r.fonts; if (S.layer === 'logo') S.layer = 'subs';
+    S.loadedFonts.delete(r.name);
+    setStyle(S.layer, 'font', r.name); renderLayers(); renderFontList(); renderStyleSide(); renderPresets();
+    toast(`Шрифт «${r.name}» добавлен`);
+  };
+  body.onkeydown = e => { if (e.key === 'Escape') close(); };
+  $('#sfSearch').oninput = draw;
+  setTimeout(() => $('#sfSearch').focus(), 30);
+  fonts = await api().system_fonts();
+  draw();
+}
 function applyPreset(name) {
   const p = S.presets[name]; if (!p) return;
   const keepLogo = S.settings.style.logo.file;

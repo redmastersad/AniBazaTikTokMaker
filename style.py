@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 
 from fontTools.ttLib import TTFont
+
+logging.getLogger("fontTools").setLevel(logging.ERROR)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 FONTS_DIR = os.path.join(APP_DIR, "Assets", "Fonts")
@@ -171,6 +174,67 @@ def font_ratio(name: str) -> float:
         if f["name"] == name:
             return f["em_ratio"]
     return 0.82
+
+
+def _system_font_dirs() -> list[str]:
+    dirs = []
+    if os.name == "nt":
+        windir = os.environ.get("WINDIR", r"C:\Windows")
+        dirs.append(os.path.join(windir, "Fonts"))
+        local = os.environ.get("LOCALAPPDATA")
+        if local:  # fonts installed "for current user only"
+            dirs.append(os.path.join(local, "Microsoft", "Windows", "Fonts"))
+    else:
+        dirs += ["/usr/share/fonts", "/usr/local/share/fonts", os.path.expanduser("~/.fonts"),
+                 "/Library/Fonts", os.path.expanduser("~/Library/Fonts")]
+    return [d for d in dirs if os.path.isdir(d)]
+
+
+SYSTEM_FONTS_CACHE = os.path.join(APP_DIR, "_tmp", "system_fonts.json")
+
+
+def list_system_fonts() -> list[dict]:
+    """Fonts installed in Windows: one entry per family (regular face preferred). Cached by file mtime."""
+    try:
+        with open(SYSTEM_FONTS_CACHE, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+    except Exception:
+        cache = {}
+    new_cache, families = {}, {}
+    for d in _system_font_dirs():
+        for root, _, files in os.walk(d):
+            for fn in files:
+                if not fn.lower().endswith((".ttf", ".otf", ".ttc")):
+                    continue
+                path = os.path.join(root, fn)
+                try:
+                    key = f"{path}|{os.path.getmtime(path):.0f}"
+                except OSError:
+                    continue
+                info = cache.get(key)
+                if info is None:
+                    info = _font_info(path) or {}
+                    if info:
+                        try:
+                            font = TTFont(path, lazy=True, fontNumber=0)
+                            info["sub"] = font["name"].getDebugName(2) or ""
+                        except Exception:
+                            info["sub"] = ""
+                new_cache[key] = info
+                if not info:
+                    continue
+                name = info["name"]
+                regular = info.get("sub", "").lower() in ("regular", "normal", "book", "roman", "")
+                if name not in families or (regular and not families[name]["regular"]):
+                    families[name] = {"name": name, "path": path, "cyrillic": info["cyrillic"], "regular": regular}
+    try:
+        os.makedirs(os.path.dirname(SYSTEM_FONTS_CACHE), exist_ok=True)
+        with open(SYSTEM_FONTS_CACHE, "w", encoding="utf-8") as f:
+            json.dump(new_cache, f, ensure_ascii=False)
+    except Exception:
+        pass
+    return sorted(({"name": v["name"], "path": v["path"], "cyrillic": v["cyrillic"]} for v in families.values()),
+                  key=lambda x: (not x["cyrillic"], x["name"].lower()))
 
 
 def import_font(src_path: str) -> dict:

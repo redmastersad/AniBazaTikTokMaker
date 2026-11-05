@@ -583,6 +583,19 @@ class Api:
             return {"error": str(e)}
         return {"fonts": style_mod.list_fonts(), "name": info["name"]}
 
+    def system_fonts(self):
+        return style_mod.list_system_fonts()
+
+    def add_system_font(self, path):
+        allowed = [os.path.abspath(f["path"]) for f in style_mod.list_system_fonts()]
+        if os.path.abspath(path or "") not in allowed:
+            return {"error": "Шрифт не найден"}
+        try:
+            info = style_mod.import_font(path)
+        except Exception as e:
+            return {"error": str(e)}
+        return {"fonts": style_mod.list_fonts(), "name": info["name"]}
+
     # --- processing
     def queue_remove(self, job_id):
         self._jobs.remove(job_id)
