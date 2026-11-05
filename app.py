@@ -14,6 +14,8 @@ import time
 import traceback
 import uuid
 
+import nowindow  # noqa: F401  (hide ffmpeg console windows; must come before ffmpeg)
+
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(APP_DIR)  # ffmpeg filter paths are relative to the app folder
 
