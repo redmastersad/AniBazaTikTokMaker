@@ -233,14 +233,12 @@ class Client:
 
     @staticmethod
     def _source_info(size: int) -> dict:
-        if size < MIN_CHUNK:
-            chunk, count = size, 1
-        else:
-            chunk = min(CHUNK, size)
-            count = size // chunk
-            if size - chunk * (count - 1) > 128 * MB:   # never happens with 10 MB chunks, kept for safety
-                count += 1
-        return {"source": "FILE_UPLOAD", "video_size": size, "chunk_size": chunk, "total_chunk_count": count}
+        # Up to 64 MB TikTok wants ONE chunk equal to the whole file (chunk_size == video_size):
+        # a single chunk bigger than chunk_size is rejected with «The chunk size is invalid».
+        if size <= 64_000_000:
+            return {"source": "FILE_UPLOAD", "video_size": size, "chunk_size": size, "total_chunk_count": 1}
+        count = size // CHUNK            # ≥ 6 here; the last chunk takes the remainder (< 2 × CHUNK)
+        return {"source": "FILE_UPLOAD", "video_size": size, "chunk_size": CHUNK, "total_chunk_count": count}
 
     def init_upload(self, path: str, post_info: dict | None) -> tuple[str, str, dict]:
         """post_info=None → draft into the TikTok inbox; otherwise a direct post."""
