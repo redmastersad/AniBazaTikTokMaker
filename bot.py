@@ -2,7 +2,28 @@ import os
 import sys
 import telebot
 from telebot.types import Message
+import json
 from main import process_video
+
+
+def studio_settings():
+    """Clip style and options saved by the TikTok Studio window (settings.json), if any."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json"), "r", encoding="utf-8") as f:
+            s = json.load(f)
+    except Exception:
+        return {}
+    music = s.get("music") or None
+    if music and not os.path.isabs(music):
+        music = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Assets", "Music", music)
+    return {
+        "style": s.get("style"),
+        "ai_model": s.get("ollama_model", "llama3.1"),
+        "remove_silence": s.get("remove_silence", True),
+        "music_path": music if music and os.path.exists(music) else None,
+        "options": {k: s[k] for k in ("whisper_model", "categories", "clip_min", "clip_max", "max_clips",
+                                      "silence_gap", "music_volume", "mirror", "filters") if k in s},
+    }
 
 # Replace 'YOUR_BOT_TOKEN' with the token from BotFather
 TOKEN = "YOUR_BOT_TOKEN"
@@ -67,7 +88,7 @@ def handle_video(message: Message):
         )
 
         # Run main logic
-        generated_files = process_video(input_path, output_dir)
+        generated_files = process_video(input_path, output_dir, **studio_settings())
 
         if not generated_files:
             bot.edit_message_text(

@@ -1,133 +1,122 @@
-import os
-import math
-import ffmpeg
+from __future__ import annotations
 
-def generate_ass_subtitles(words_data, output_ass_path, subclips):
-    """
-    Generates an Advanced SubStation Alpha (.ass) file with TikTok style subtitles.
-    Maps absolute word timestamps to relative timestamps based on the concatenated subclips.
-    """
+import os
+
+from style import (PLAY_H, PLAY_W, apply_case, ass_escape, ass_inline_color,
+                   normalize_style, pos_tag, style_line)
+
+
+def _format_time(t: float) -> str:
+    if t < 0:
+        t = 0
+    h = int(t / 3600)
+    m = int((t % 3600) / 60)
+    s = t % 60
+    cs = int(round((s - int(s)) * 100))
+    if cs == 100:
+        cs = 99
+    return f"{h}:{m:02d}:{int(s):02d}.{cs:02d}"
+
+
+def _clip_words(words_data, subclips):
+    """Maps absolute word timestamps to the timeline of the concatenated clip."""
     clip_words = []
     current_relative_time = 0.0
-    
     for (start, end) in subclips:
         for w in words_data:
-            # Word must fall within the subclip boundaries (with a small margin)
             if w['end'] >= start - 0.2 and w['start'] <= end + 0.2:
-                # Clamp the word to the subclip boundaries
                 w_start = max(start, w['start'])
                 w_end = min(end, w['end'])
-                
                 if w_end > w_start:
-                    # Convert to relative time within the final concatenated video
-                    rel_start = current_relative_time + (w_start - start)
-                    rel_end = current_relative_time + (w_end - start)
-                    
                     clip_words.append({
                         'word': w['word'].strip(),
-                        'start': rel_start,
-                        'end': rel_end
+                        'start': current_relative_time + (w_start - start),
+                        'end': current_relative_time + (w_end - start),
                     })
-        
         current_relative_time += (end - start)
+    return clip_words, current_relative_time
 
-    # ASS Header
-    ass_content = """[Script Info]
-Title: AniBaza Auto Subtitles
-Original Script: Created exclusively for AniBaza
-ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
-WrapStyle: 1
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: TikTokStyle,Montserrat Black,110,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2,5,2,10,10,150,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-
-    def format_time(t):
-        if t < 0: t = 0
-        h = int(t / 3600)
-        m = int((t % 3600) / 60)
-        s = t % 60
-        cs = int((s - int(s)) * 100)
-        return f"{h}:{m:02d}:{int(s):02d}.{cs:02d}"
-
-    phrases = []
-    phrase = []
-    
-    for i, w in enumerate(clip_words):
-        # Cap single word duration to max 1.0s to prevent Whisper stretching timestamps into silence
+def _phrases(clip_words, max_words):
+    phrases, phrase = [], []
+    for w in clip_words:
+        # Whisper sometimes stretches a word into the following silence
         if w['end'] - w['start'] > 1.0:
             w['end'] = w['start'] + 1.0
-            
-        # If there's a large gap (e.g., >0.5s) between this word and the last, break the phrase
         if phrase and (w['start'] - phrase[-1]['end'] > 0.5):
             phrases.append(phrase)
             phrase = []
-            
         phrase.append(w)
-        
-        # Break phrase if it gets too long (max 3 words) or hits punctuation
-        if len(phrase) >= 3 or w['word'].endswith(('.', '!', '?')):
+        if len(phrase) >= max_words or w['word'].endswith(('.', '!', '?')):
             phrases.append(phrase)
             phrase = []
-            
     if phrase:
         phrases.append(phrase)
+    return phrases
 
-    # Generate ASS events word-by-word for the karaoke bounce effect
-    for p in phrases:
-        for i, target_word in enumerate(p):
-            w_start = format_time(target_word['start'])
-            
-            # Connect the end of this word to the start of the next word to prevent flickering within a phrase
-            if i < len(p) - 1:
-                w_end_time = min(target_word['end'] + 0.3, p[i+1]['start'])
-            else:
-                w_end_time = target_word['end']
-                
-            w_end = format_time(w_end_time)
-            
-            text_line = "{\\blur2}" # Soft shadow blur effect applied to the outline and shadow
-            for j, w in enumerate(p):
-                clean_word = w['word'].strip().upper()
-                if j == i:
-                    # Active word: Yellow (#FFD700 -> &H0000D7FF&), Bounce from 90% to 100%
-                    text_line += f"{{\\c&H0000D7FF&\\fscx90\\fscy90\\t(0,100,\\fscx100\\fscy100)}}{clean_word}{{\\c&H00FFFFFF&\\fscx100\\fscy100}} "
+
+def generate_ass_subtitles(words_data, output_ass_path, subclips, style: dict | None = None, title: str | None = None):
+    """
+    Writes an .ass file with TikTok-style subtitles (and optionally the AI title on top)
+    using fonts, colours and positions from the clip style.
+    """
+    st = normalize_style(style)
+    subs, ttl = st["subs"], st["title"]
+    clip_words, total = _clip_words(words_data, subclips)
+
+    lines = [
+        "[Script Info]",
+        "Title: AniBaza Auto Subtitles",
+        "ScriptType: v4.00+",
+        f"PlayResX: {PLAY_W}",
+        f"PlayResY: {PLAY_H}",
+        "WrapStyle: 0",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
+        "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
+        "MarginR, MarginV, Encoding",
+        style_line("Subs", subs),
+        style_line("Title", ttl),
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+
+    if ttl.get("visible") and title:
+        text = ass_escape(apply_case(title.strip(), ttl.get("case", "upper")))
+        lines.append(f"Dialogue: 1,{_format_time(0)},{_format_time(total)},Title,,0,0,0,,{{{pos_tag(ttl)}}}{text}")
+
+    if subs.get("visible", True):
+        base = ass_inline_color(subs["color"])
+        hl = ass_inline_color(subs["hl"])
+        anim = subs.get("anim", "pop")
+        pos = pos_tag(subs)
+        for p in _phrases(clip_words, max(1, int(subs.get("words", 3)))):
+            words = [ass_escape(apply_case(w['word'].strip(), subs.get("case", "upper"))) for w in p]
+            if anim == "none":
+                start, end = p[0]['start'], p[-1]['end'] + 0.15
+                lines.append(f"Dialogue: 0,{_format_time(start)},{_format_time(end)},Subs,,0,0,0,,{{{pos}\\blur1}}{' '.join(words)}")
+                continue
+            for i, target in enumerate(p):
+                # Hold each state until the next word starts so the phrase doesn't flicker
+                if i < len(p) - 1:
+                    end_t = min(target['end'] + 0.3, p[i + 1]['start'])
                 else:
-                    text_line += f"{clean_word} "
-                    
-            ass_content += f"Dialogue: 0,{w_start},{w_end},TikTokStyle,,0,0,0,,{text_line.strip()}\n"
+                    end_t = target['end']
+                text = f"{{{pos}\\blur1}}"
+                for j, word in enumerate(words):
+                    if j == i:
+                        if anim == "pop":
+                            text += f"{{\\c&H{hl}&\\fscx88\\fscy88\\t(0,100,\\fscx100\\fscy100)}}{word}{{\\c&H{base}&\\fscx100\\fscy100}} "
+                        else:  # karaoke
+                            text += f"{{\\c&H{hl}&}}{word}{{\\c&H{base}&}} "
+                    else:
+                        text += f"{word} "
+                lines.append(f"Dialogue: 0,{_format_time(target['start'])},{_format_time(end_t)},Subs,,0,0,0,,{text.strip()}")
 
+    os.makedirs(os.path.dirname(os.path.abspath(output_ass_path)), exist_ok=True)
     with open(output_ass_path, 'w', encoding='utf-8') as f:
-        f.write(ass_content)
-        
+        f.write("\n".join(lines) + "\n")
     print(f"Generated ASS subtitle file: {output_ass_path}")
-
-def burn_subtitles(video_path, ass_path, output_path):
-    """
-    Burns the .ass subtitles into the video using ffmpeg.
-    """
-    import os
-    # Use relative paths for the ASS filter to avoid absolute path escaping hell on Windows
-    rel_ass_path = os.path.relpath(ass_path, os.getcwd())
-    ass_path_escaped = rel_ass_path.replace('\\', '/')
-    
-    print(f"Burning subtitles into {output_path}...")
-    stream = ffmpeg.input(video_path)
-    video = stream.video.filter('ass', ass_path_escaped)
-    audio = stream.audio
-    
-    try:
-        out = ffmpeg.output(video, audio, output_path, vcodec='libx264', acodec='aac', strict='experimental')
-        out.run(overwrite_output=True, quiet=True)
-    except ffmpeg.Error as e:
-        print("FFMPEG ERROR STDOUT:", e.stdout.decode('utf8', errors='ignore') if e.stdout else "None")
-        print("FFMPEG ERROR STDERR:", e.stderr.decode('utf8', errors='ignore') if e.stderr else "None")
-        raise RuntimeError(f"FFmpeg failed: {e.stderr.decode('utf8', errors='ignore') if e.stderr else 'Unknown error'}")
-        
-    print(f"Final video saved to {output_path}")
