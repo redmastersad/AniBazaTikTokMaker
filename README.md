@@ -53,6 +53,14 @@ Launch `run_tiktok_ai.bat`. The window has six sections:
 
 The previous simple window is still available via `run_old_gui.bat`.
 
+**Method 3 (TikTok upload from a folder, official API):**
+`run_tiktok_upload.bat` uploads every `.mp4/.mov/.webm` from a folder to TikTok through the Content Posting API (no browser robot). Drag the folder onto the .bat or type its path. Uploaded videos move to the `Залито в TikTok` subfolder, so the next run only takes new ones; a log is kept in `tiktok_upload_log.txt`.
+- Mode 1 sends videos to TikTok drafts (finish them in the TikTok app); mode 2 posts directly with the chosen privacy.
+- Caption: `<video>.txt` next to the video, else the AI title from `clips.json`, else the file name, through a template with `{название}`, `{тайтл}`, `{серия}` and hashtags.
+- One-time setup at https://developers.tiktok.com: create an app with platform **Desktop**, add the products **Login Kit** and **Content Posting API** (turn on Direct Post), scopes `user.info.basic`, `video.upload`, `video.publish`, redirect URI `http://127.0.0.1:3455/callback/`, add your TikTok account as a test user in Sandbox. Enter the Client key and Client secret on the first run (saved to `tiktok_config.json`) or put them into `.env` as `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET`.
+- Until TikTok audits the app, direct posts are private («только мне») and the account must be private; after the audit public posting works. TikTok also caps posts per account per day (about 15).
+- `--relogin` signs in again, `--logout` forgets the TikTok login, `--pause N` sets the pause between videos.
+
 **Method 2 (Telegram Bot):**
 1. Obtain a bot token from `@BotFather` on Telegram.
 2. Open `bot.py` and assign the token to the `TOKEN` variable: `TOKEN = "YOUR_BOT_TOKEN"`.

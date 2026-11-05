@@ -29,3 +29,7 @@ app.log
 _tmp/
 _webview/
 *.part
+
+# TikTok API keys and login
+tiktok_config.json
+tiktok_token.json
