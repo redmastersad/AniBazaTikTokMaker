@@ -10,7 +10,7 @@ Provide a long video, and the system will output a collection of vertical 9:16 v
 Subtitle fonts are bundled in `Assets/Fonts` (Montserrat Black, Russo One, Rubik Mono One, Unbounded, all under the SIL Open Font License) and are embedded into the clips by FFmpeg, so nothing has to be installed in Windows. Custom `.ttf`/`.otf` fonts can be added from the app.
 
 ## Features
-* **AniBaza Custom AI Director:** Utilizes `Llama 3.1` (Ollama) to identify the most engaging, significant, or dramatic moments within the footage.
+* **AniBaza Custom AI Director:** Utilizes a local Ollama model (`llama3.1`, better: `qwen2.5:14b`) to identify the most engaging moments: the episode is read in 3-minute parts by numbered lines (clips always start/end on whole phrases), openings/endings and Whisper junk are skipped, loud emotional sound adds points, the best candidates are ranked against each other, and cuts snap to pauses and scene changes. Every run leaves a report in `_tmp/analysis_*.json`.
 * **Full Autonomy:** Operates locally without requiring API keys, subscriptions, or recurring costs.
 * **High-Precision Transcription:** Employs `faster-whisper (large-v3)` on the GPU for accurate speech-to-text conversion.
 * **Smart Jump Cuts:** Automatically cuts out silences > 2.0s without breaking dialogues.

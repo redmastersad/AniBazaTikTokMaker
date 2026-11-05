@@ -8,7 +8,7 @@ import time
 
 from dotenv import load_dotenv
 
-from analyzer import find_highlights
+from analyzer import clean_words, find_highlights
 from style import APP_DIR, normalize_style, resolve_logo
 from subtitles import generate_ass_subtitles
 from transcriber import transcribe_video
@@ -115,8 +115,13 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     # 2. Analyze
     print("\n--- Step 2: AI Analysis ---")
     emit("step", {"step": 1, "progress": 0})
+    words_data = clean_words(words_data)  # drop Whisper junk («Субтитры сделал…») from subtitles too
+    show, episode = parse_episode_name(video_path)
+    report = os.path.join(APP_DIR, "_tmp", "analysis_" + re.sub(r"[^\w\-]+", "_", f"{show}_{episode}")[:80] + ".json")
     highlights = find_highlights(words_data, model_name=ai_model, categories=opts["categories"],
-                                 min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"])
+                                 min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"],
+                                 video_path=video_path, report_path=report, cancel=cancel,
+                                 on_progress=lambda p: emit("step", {"step": 1, "progress": p}))
     emit("moments", {"moments": highlights})
     emit("step", {"step": 1, "progress": 1})
     if not highlights:
@@ -127,7 +132,6 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     os.makedirs(output_dir, exist_ok=True)
     tmp_dir = os.path.join(APP_DIR, "_tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    show, episode = parse_episode_name(video_path)
     generated_files = []
 
     # 3. Montage + subtitles (one ffmpeg pass per clip)
