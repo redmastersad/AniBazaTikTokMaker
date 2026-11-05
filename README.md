@@ -6,10 +6,8 @@ A fully automated local AI pipeline for creating short vertical videos (TikTok, 
 
 Provide a long video, and the system will output a collection of vertical 9:16 videos featuring integrated subtitles, background blur, and optimal cropping.
 
-## CRITICAL REQUIREMENT: FONT INSTALLATION
-**For the subtitles to render correctly, you MUST install the `Montserrat Black` font on your Windows system.**
-If this font is missing, FFmpeg will fallback to a default system font, which will ruin the TikTok-style aesthetic of the subtitles. 
-Make sure you download and install the Montserrat font family (specifically the "Black" weight) before running the generator.
+## Fonts
+Subtitle fonts are bundled in `Assets/Fonts` (Montserrat Black, Russo One, Rubik Mono One, Unbounded, all under the SIL Open Font License) and are embedded into the clips by FFmpeg, so nothing has to be installed in Windows. Custom `.ttf`/`.otf` fonts can be added from the app.
 
 ## Features
 * **AniBaza Custom AI Director:** Utilizes `Llama 3.1` (Ollama) to identify the most engaging, significant, or dramatic moments within the footage.
@@ -25,7 +23,6 @@ Make sure you download and install the Montserrat font family (specifically the 
 - **OS:** Windows 10/11
 - **GPU:** NVIDIA Graphics Card (6 GB VRAM minimum recommended for CUDA). 
 - **Dependencies:** **Python 3.9+** and **FFmpeg** must be installed on the system.
-- **Fonts:** `Montserrat Black` font installed in Windows.
 
 ## Installation (Windows)
 
@@ -38,7 +35,6 @@ Make sure you download and install the Montserrat font family (specifically the 
 2. **Install prerequisite software:**
    - Download and install [Ollama](https://ollama.com/) (required for the AI Director module).
    - Ensure `FFmpeg` is installed and added to the system `PATH`.
-   - **Install the `Montserrat` font family on your PC.**
 
 3. **Automated Setup:**
    Execute the `install.bat` file. 
@@ -46,9 +42,16 @@ Make sure you download and install the Montserrat font family (specifically the 
 
 ## Usage
 
-**Method 1 (Desktop GUI):**
-Launch `run_tiktok_ai.bat`.
-The application window will open. Select the source video file (e.g., a podcast or recording), specify the output directory, and optionally select a PNG logo. Initiate the process and wait for completion.
+**Method 1 (TikTok Studio window):**
+Launch `run_tiktok_ai.bat`. The window has six sections:
+- **Новая нарезка** — drop episodes (or pick files), choose what the AI should look for, clip length, how many clips per episode, music, silence cutting, anti-copyright filters, the Ollama model and the output folder.
+- **Стиль и шрифты** — live 9:16 preview. Drag the subtitles, the AI title and the logo with the mouse (or arrow keys), pick a font or upload your own, change size, letter spacing, case, colours, outline, shadow, animation and words per screen. TikTok/Shorts button zones are shown. Styles can be saved as presets.
+- **Обработка** — progress of transcription, AI search and montage, the moments found by the AI, pause/cancel and a log.
+- **Готовые клипы** — all generated clips with AI titles and scores; select the best ones to delete or publish.
+- **Публикация** — YouTube Shorts upload queue (Chrome robot) with title/description templates (`{название}`, `{тайтл}`, `{серия}`) and visibility.
+- **Настройки** — Whisper model, silence threshold, custom music/logos/fonts.
+
+The previous simple window is still available via `run_old_gui.bat`.
 
 **Method 2 (Telegram Bot):**
 1. Obtain a bot token from `@BotFather` on Telegram.

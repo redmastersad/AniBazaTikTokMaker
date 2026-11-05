@@ -1,4 +1,5 @@
-import os
+from __future__ import annotations
+
 import json
 import httpx
 from pydantic import BaseModel
@@ -77,44 +78,61 @@ def snap_to_sentence_boundaries(start_t: float, end_t: float, words_data: List[d
     
     return snapped_start, snapped_end
 
-def find_highlights(words_data: List[dict], model_name: str = "llama3.1") -> List[dict]:
+# What the AI director may look for (ids are stored in settings, labels are shown in the app)
+CATEGORIES = {
+    "hype": ("Хайп и пафос", "Pure hype moments: characters trash-talking, revealing true power, epic threats, determination speeches, screaming with emotion."),
+    "funny": ("Угар", "Extremely funny, absurd or highly awkward interactions."),
+    "villain": ("Монологи злодеев", "Villain monologues and philosophy: cold, calculating or insane speeches about reality, pain or power."),
+    "twist": ("Твисты", "Shocking betrayals, crazy plot twists or dramatic reveals."),
+    "drama": ("Драма", "Heartbreaking, sad or emotional scenes: loss, confessions, tears."),
+    "romance": ("Романтика", "Romantic, cute or flirty moments between characters."),
+}
+DEFAULT_CATEGORIES = ["hype", "funny", "villain", "twist"]
+
+
+def find_highlights(words_data: List[dict], model_name: str = "llama3.1", categories: List[str] | None = None,
+                    min_len: float = 25, max_len: float = 60, max_clips: int = 6) -> List[dict]:
     """
     Uses local Ollama API to analyze the transcript without needing an API key.
     Requires Ollama to be running with the specified model.
     """
     transcript_with_timestamps = prepare_transcript_for_llm(words_data)
-    
-    # Check if transcript is long enough
+
     if not words_data or len(words_data) < 10:
         print("Transcript is too short to find highlights.")
         return []
-        
+
+    cats = [c for c in (categories or DEFAULT_CATEGORIES) if c in CATEGORIES] or DEFAULT_CATEGORIES
+    min_len, max_len = float(min_len), float(max(max_len, min_len + 5))
+    wanted = "\n".join(f"{i + 1}. [{c}] {CATEGORIES[c][1]}" for i, c in enumerate(cats))
+
     prompt = f"""
 You are an elite TikTok/Reels editor specializing STRICTLY IN ANIME.
 Your goal is to extract the absolute BEST, most viral, and emotional anime scenes from this episode transcript.
+The dialogue is a Russian dub.
 
-WHAT YOU MUST FIND (Viral Anime Tropes):
-1. Villain Monologues & Philosophy (cold, calculating, or insane speeches about reality, pain, or power).
-2. The "Determination" / Hero Speech (refusing to give up, screaming with emotion).
-3. Shocking Betrayals, crazy plot twists, or dramatic reveals.
-4. Pure Hype Moments (characters trash-talking, revealing true power, or epic threats).
-5. Extremely funny, absurd, or highly awkward interactions.
+WHAT YOU MUST FIND (only these kinds of moments):
+{wanted}
 
 STRICT RULES:
-1. DURATION: Each clip MUST be between 25 and 60 seconds long.
-2. CONTENT: Focus ONLY on raw emotion, deep philosophy, intense screaming, or high comedy.
-3. BAN LIST: DO NOT select boring exposition, casual small talk, greetings, or silent scenes. If it's not EPIC or HILARIOUS, skip it.
-4. CONTEXT: The clip must make sense on its own. Start the clip a few seconds BEFORE the main quote so there is build-up.
-5. ACCURACY: You MUST use the exact timestamps provided in the transcript. DO NOT invent numbers.
+1. DURATION: Each clip MUST be between {min_len:.0f} and {max_len:.0f} seconds long.
+2. BAN LIST: DO NOT select boring exposition, casual small talk, greetings, or silent scenes.
+3. CONTEXT: The clip must make sense on its own. Start the clip a few seconds BEFORE the main quote so there is build-up.
+4. ACCURACY: You MUST use the exact timestamps provided in the transcript. DO NOT invent numbers.
+5. Return up to {max_clips} moments, best first.
+6. "title" MUST be in Russian: a short, highly clickable hook (max 60 characters).
+7. "category" is one of: {", ".join(cats)}. "score" is 1-5, how viral the moment is.
 
 Output ONLY a JSON object in this exact format, with no extra text:
 {{
   "highlights": [
     {{
-      "title": "A highly clickable, hype title for TikTok",
+      "title": "Короткий цепляющий заголовок",
       "start_time": 10.5,
       "end_time": 45.2,
-      "explanation": "Why this anime moment is epic and will get high retention"
+      "category": "{cats[0]}",
+      "score": 5,
+      "explanation": "Почему этот момент зайдёт (по-русски)"
     }}
   ]
 }}
@@ -170,19 +188,25 @@ Anime Transcript:
                 # Snap boundaries and add padding
                 start_t, end_t = snap_to_sentence_boundaries(start_t, end_t, words_data)
                 
-                # Strict limit: maximum 60 seconds per clip
-                if end_t - start_t > 60.0:
-                    end_t = start_t + 60.0
-                
+                if end_t - start_t > max_len:
+                    end_t = start_t + max_len
+
                 # Protection against micro-clips
-                if end_t - start_t < 15.0:
+                if end_t - start_t < min(15.0, min_len):
                     continue
-                    
+
+                try:
+                    score = max(1, min(5, int(round(float(h.get("score", 3))))))
+                except (TypeError, ValueError):
+                    score = 3
+                category = h.get("category") if h.get("category") in CATEGORIES else cats[0]
                 result.append({
-                    "title": h.get("title", "Highlight"),
+                    "title": str(h.get("title") or "Момент").strip(),
                     "start": start_t,
                     "end": end_t,
-                    "explanation": h.get("explanation", "")
+                    "explanation": str(h.get("explanation") or ""),
+                    "category": category,
+                    "score": score,
                 })
         
         # Protection against duplicates and overlapping moments
@@ -201,7 +225,11 @@ Anime Transcript:
                     continue
                 filtered_result.append(h)
                 print(f"Found highlight: '{h['title']}' ({h['start']}s - {h['end']}s)")
-            
+
+        # Keep the best N, then put them back in timeline order
+        if max_clips and len(filtered_result) > max_clips:
+            filtered_result = sorted(filtered_result, key=lambda x: -x["score"])[:max_clips]
+            filtered_result.sort(key=lambda x: x["start"])
         return filtered_result
     except Exception as e:
         print(f"Failed to parse AI response: {e}")

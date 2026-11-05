@@ -17,9 +17,34 @@ except Exception:
 
 from faster_whisper import WhisperModel
 
-def transcribe_video(video_path: str, model_size: str = "large-v3"):
+
+def _collect(segments, info, on_progress=None, cancel=None, label=""):
+    transcript_text = ""
+    words_data = []
+    duration = float(getattr(info, "duration", 0) or 0)
+    for segment in segments:
+        if cancel is not None and cancel.is_set():
+            from video_editor import Cancelled
+            raise Cancelled()
+        print(f"Transcribing{label}: {segment.start:.1f}s - {segment.end:.1f}s...")
+        if on_progress and duration:
+            on_progress(min(1.0, segment.end / duration))
+        transcript_text += segment.text + " "
+        for word in segment.words or []:
+            words_data.append({
+                "word": word.word,
+                "start": word.start,
+                "end": word.end,
+                "probability": word.probability,
+            })
+    return transcript_text, words_data
+
+
+def transcribe_video(video_path: str, model_size: str = "large-v3", language: str = "ru",
+                     on_progress=None, cancel=None):
     """
-    Transcribes a video file and returns segments with word-level timestamps.
+    Transcribes a video file and returns (text, words) with word-level timestamps.
+    on_progress(0..1) is called as segments arrive; setting `cancel` stops it.
     """
     print(f"Loading faster-whisper model '{model_size}'...")
     try:
@@ -28,57 +53,28 @@ def transcribe_video(video_path: str, model_size: str = "large-v3"):
     except Exception as e:
         print(f"CUDA not found ({e}), falling back to CPU...")
         model = WhisperModel(model_size, device="cpu", compute_type="int8")
-        
+
     print(f"Starting transcription for {video_path}...")
-    
     try:
-        # Force Russian language and filter silence
-        segments, info = model.transcribe(video_path, word_timestamps=True, language="ru", vad_filter=True)
-        print(f"Language forced to '{info.language}'")
-        
-        transcript_text = ""
-        words_data = []
-        
-        for segment in segments:
-            print(f"Transcribing: {segment.start:.1f}s - {segment.end:.1f}s...")
-            transcript_text += segment.text + " "
-            if segment.words:
-                for word in segment.words:
-                    words_data.append({
-                        "word": word.word,
-                        "start": word.start,
-                        "end": word.end,
-                        "probability": word.probability
-                    })
+        segments, info = model.transcribe(video_path, word_timestamps=True, language=language, vad_filter=True)
+        transcript_text, words_data = _collect(segments, info, on_progress, cancel)
     except Exception as e:
+        from video_editor import Cancelled
+        if isinstance(e, Cancelled):
+            del model
+            raise
         print(f"CUDA error during transcription: {e}")
         print("Falling back to CPU with 'small' model due to missing NVIDIA DLLs...")
+        del model
         model = WhisperModel("small", device="cpu", compute_type="int8")
-        segments, info = model.transcribe(video_path, word_timestamps=True, language="ru", vad_filter=True)
-        
-        transcript_text = ""
-        words_data = []
-        for segment in segments:
-            print(f"Transcribing (CPU): {segment.start:.1f}s - {segment.end:.1f}s...")
-            transcript_text += segment.text + " "
-            if segment.words:
-                for word in segment.words:
-                    words_data.append({
-                        "word": word.word,
-                        "start": word.start,
-                        "end": word.end,
-                        "probability": word.probability
-                    })
-                    
+        segments, info = model.transcribe(video_path, word_timestamps=True, language=language, vad_filter=True)
+        transcript_text, words_data = _collect(segments, info, on_progress, cancel, " (CPU)")
+
     print("Transcription complete.")
-    
-    # Explicitly delete the model and clear memory to free VRAM for Ollama
+
+    # Free VRAM for Ollama
     del model
     import gc
     gc.collect()
-    
-    return transcript_text.strip(), words_data
 
-if __name__ == "__main__":
-    # Simple test
-    pass
+    return transcript_text.strip(), words_data

@@ -31,5 +31,6 @@ if %errorlevel% equ 0 (
 
 echo.
 echo DONE!
-echo You can now launch the program via: run_tiktok_ai.bat (or the Desktop Shortcut)
+echo You can now launch the program via: run_tiktok_ai.bat
+echo Fonts for subtitles are bundled in Assets\Fonts, no need to install them in Windows.
 pause

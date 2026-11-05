@@ -1,0 +1,5 @@
+Golos Text and Unbounded, SIL Open Font License 1.1 (https://openfontlicense.org)
+Copyright 2019 The Golos Text Project Authors (https://github.com/googlefonts/golos-text)
+
+Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
+
