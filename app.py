@@ -85,6 +85,8 @@ except Exception as _e:  # pywebview missing or broken -> open the UI in Edge/br
     print(f"pywebview недоступен ({_e}), открываю окно через браузер")
 
 import style as style_mod  # noqa: E402
+import tiktok_api  # noqa: E402
+import tiktok_queue  # noqa: E402
 from analyzer import CATEGORIES, DEFAULT_CATEGORIES  # noqa: E402
 from main import (DEFAULT_OPTIONS, parse_episode_name, process_video,  # noqa: E402
                   read_clips_index, write_clips_index)
@@ -114,6 +116,7 @@ DEFAULT_SETTINGS = {
         "desc_tpl": "Озвучка AniBaza. Смотри полностью на anibaza.com\n{тайтл}, {серия} серия\n#аниме #shorts",
         "visibility": "PUBLIC",
     },
+    "tiktok": copy.deepcopy(tiktok_queue.DEFAULT_TT_SETTINGS),
 }
 
 
@@ -151,8 +154,8 @@ def load_settings() -> dict:
     for k, v in data.items():
         if k == "style":
             s["style"] = style_mod.normalize_style(v)
-        elif k == "upload" and isinstance(v, dict):
-            s["upload"].update(v)
+        elif k in ("upload", "tiktok") and isinstance(v, dict):
+            s[k].update(v)
         elif k in s:
             s[k] = v
     if old_logo and old_logo != "None" and "style" not in data:
@@ -467,6 +470,7 @@ class Api:
         self._sys = SystemStatus()
         self._jobs = Jobs(self)
         self._uploads = Uploads(self)
+        self._tiktok = tiktok_queue.TikTokQueue(self)
         self._window = None
         self._thumb_cache = {}
         self._thumb_lock = threading.Lock()
@@ -514,8 +518,8 @@ class Api:
         for k, v in (settings or {}).items():
             if k == "style":
                 merged["style"] = style_mod.normalize_style(v)
-            elif k == "upload" and isinstance(v, dict):
-                merged["upload"].update(v)
+            elif k in ("upload", "tiktok") and isinstance(v, dict):
+                merged[k].update(v)
             elif k in DEFAULT_SETTINGS:
                 merged[k] = v
         self._settings = merged
@@ -633,6 +637,7 @@ class Api:
         snap = self._jobs.snapshot()
         snap["log"] = LOG.since(int(log_since or 0))
         snap["uploads"] = self._uploads.snapshot()
+        snap["tiktok"] = self._tiktok.snapshot()
         return snap
 
     # --- clips
@@ -667,9 +672,11 @@ class Api:
                                   "created": os.path.getmtime(p)})
         items.sort(key=lambda c: -c.get("created", 0))
         uploaded = {u["file"]: u["status"] for u in self._uploads.items}
+        on_tt = {it["path"]: it["status"] for it in self._tiktok.items}
         for c in items:
             c["thumb"] = self._thumb(out_dir, c["file"])
             c["upload"] = uploaded.get(c["file"])
+            c["tiktok"] = on_tt.get(os.path.join(out_dir, c["file"]))
         return {"out_dir": out_dir, "items": items}
 
     def open_clip(self, fn):
@@ -719,6 +726,73 @@ class Api:
 
     def upload_clear_done(self):
         self._uploads.clear_done()
+
+    def open_url(self, url):
+        if str(url).startswith("https://"):
+            import webbrowser
+            webbrowser.open(url)
+
+    # --- TikTok (official Content Posting API)
+    def tt_account(self, refresh=False):
+        return self._tiktok.account_info(bool(refresh))
+
+    def tt_save_keys(self, key, secret):
+        key, secret = (key or "").strip(), (secret or "").strip()
+        if not key or not secret:
+            return {"error": "Нужны оба ключа"}
+        tiktok_api.save_keys(key, secret)
+        tiktok_api.logout()
+        return self._tiktok.account_info(True)
+
+    def tt_login(self):
+        return self._tiktok.login()
+
+    def tt_logout(self):
+        tiktok_api.logout()
+        return self._tiktok.account_info(True)
+
+    def tt_add_clips(self, files, start=True):
+        out_dir = self._settings["out_dir"]
+        n = self._tiktok.add_files([os.path.join(out_dir, os.path.basename(f)) for f in files or []], "clips")
+        if start and n:
+            self._tiktok.start()
+        return n
+
+    def tt_add_folder(self, start=False):
+        res = self._dialog("folder")
+        if not res:
+            return None
+        n = self._tiktok.add_folder(res[0])
+        if start and n:
+            self._tiktok.start()
+        return n
+
+    def tt_add_files(self, start=False):
+        paths = self._dialog("open", ("Видео (*.mp4;*.mov;*.webm)", "Все файлы (*.*)"), True)
+        n = self._tiktok.add_files(paths, "folder")
+        if start and n:
+            self._tiktok.start()
+        return n
+
+    def tt_add_gdrive(self, url):
+        return self._tiktok.add_gdrive(url)
+
+    def tt_start(self):
+        self._tiktok.start()
+
+    def tt_stop(self):
+        self._tiktok.stop()
+
+    def tt_update(self, item_id, fields):
+        self._tiktok.update(item_id, fields or {})
+        if (fields or {}).get("retry"):
+            self._tiktok.start()
+
+    def tt_remove(self, item_id):
+        self._tiktok.remove(item_id)
+
+    def tt_clear_done(self):
+        self._tiktok.clear_done()
 
 
 _TK_LOCK = threading.Lock()
