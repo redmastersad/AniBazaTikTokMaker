@@ -267,6 +267,8 @@ class Client:
                             "Content-Range": f"bytes {first}-{last}/{size}",
                         })
                         if r.status_code in (200, 201, 206):
+                            if i == count - 1 and r.status_code == 206:
+                                raise TikTokError("upload_incomplete", "TikTok ждёт ещё данные, файл не принят целиком")
                             break
                         if r.status_code < 500:
                             raise TikTokError(f"upload_http_{r.status_code}", r.text[:300])
@@ -284,11 +286,14 @@ class Client:
 
     def wait(self, publish_id: str, timeout: int = 600) -> dict:
         """Waits until TikTok has the video (inbox) or posted it. Returns the last status."""
-        end = time.time() + timeout
+        start = time.time()
+        end = start + timeout
         st: dict = {}
         while time.time() < end:
             st = self.status(publish_id)
             s = st.get("status")
+            if s == "PROCESSING_UPLOAD" and time.time() - start > 180:
+                raise TikTokError("upload_stuck", "TikTok так и не принял файл, попробуй ещё раз")
             if s in ("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE"):
                 return st
             if s == "FAILED":
