@@ -1,4 +1,7 @@
 @echo off
+rem Everything is inside one block: cmd reads it whole before running,
+rem so the auto-update may safely replace this .bat file.
+(
 cd /d "%~dp0"
 if not exist "venv\Scripts\python.exe" (
     echo venv not found. Run install.bat first.
@@ -6,6 +9,7 @@ if not exist "venv\Scripts\python.exe" (
     exit /b
 )
 if not exist "_tmp" mkdir "_tmp"
+"venv\Scripts\python.exe" updater.py
 "venv\Scripts\python.exe" -c "import webview" >nul 2>&1
 if errorlevel 1 (
     echo Installing the window component pywebview...
@@ -19,3 +23,5 @@ if errorlevel 1 (
     )
 )
 start "" "venv\Scripts\pythonw.exe" app.py
+exit /b
+)

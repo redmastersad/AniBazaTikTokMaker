@@ -540,6 +540,34 @@ class Api:
     def system(self):
         return self._sys.get()
 
+    # --- auto-update (the update itself runs in run_tiktok_ai.bat before the window opens)
+    def update_info(self):
+        now = time.time()
+        cached = getattr(self, "_upd", None)
+        if cached and now - cached["checked"] < 1800:
+            return cached
+        import updater
+        avail, loc, rem = updater.update_available()
+        self._upd = {"checked": now, "available": avail, "version": (loc or "")[:7], "remote": (rem or "")[:7]}
+        try:
+            with open(os.path.join(APP_DIR, "_tmp", "updated.json"), "r", encoding="utf-8") as f:
+                self._upd["just_updated"] = json.load(f).get("files", [])
+            os.remove(os.path.join(APP_DIR, "_tmp", "updated.json"))
+        except (OSError, ValueError):
+            pass
+        return self._upd
+
+    def update_now(self):
+        """Restarts through run_tiktok_ai.bat, which downloads the update first."""
+        if self._jobs.running:
+            return {"error": "Дождись конца нарезки или отмени её"}
+        bat = os.path.join(APP_DIR, "run_tiktok_ai.bat")
+        if not sys.platform.startswith("win") or not os.path.exists(bat):
+            return {"error": "Перезапусти программу вручную"}
+        subprocess.Popen(["cmd", "/c", bat], cwd=APP_DIR, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        threading.Timer(0.8, lambda: os._exit(0)).start()
+        return {"ok": True}
+
     # --- settings & presets
     def save_settings(self, settings):
         merged = copy.deepcopy(self._settings)

@@ -193,7 +193,15 @@ function renderSys() {
   $('#sys').innerHTML = (g
     ? `<div class="t"><span><span class="dot"></span>${esc(g.name)}</span><span>${g.used.toFixed(1)}/${g.total.toFixed(0)} ГБ</span></div><div class="bar"><i style="width:${Math.round(g.used / g.total * 100)}%"></i></div>`
     : `<div class="t"><span><span class="dot off"></span>Видеокарта не найдена</span></div><div style="height:10px"></div>`) +
-    `<div class="t"><span><span class="dot ${o.ok && has ? '' : 'off'}"></span>Ollama · ${esc(model)}</span><span>${!o.ok ? 'выкл' : has ? 'готов' : 'нет модели'}</span></div>`;
+    `<div class="t"><span><span class="dot ${o.ok && has ? '' : 'off'}"></span>Ollama · ${esc(model)}</span><span>${!o.ok ? 'выкл' : has ? 'готов' : 'нет модели'}</span></div>` +
+    (S.upd && S.upd.available ? `<div class="upd" data-act="update">⟳ Есть обновление — обновить</div>`
+      : S.upd && S.upd.version ? `<div class="t ver"><span>Версия ${esc(S.upd.version)}</span></div>` : '');
+}
+async function checkUpdate() {
+  try {
+    S.upd = await api().update_info(); renderSys();
+    if (S.upd.just_updated && S.upd.just_updated.length) toast(`Программа обновилась · ${S.upd.just_updated.length} ${plural(S.upd.just_updated.length, 'файл', 'файла', 'файлов')}`);
+  } catch (e) { }
 }
 function renderBadges() {
   const jobs = S.prog.jobs, q = jobs.filter(j => j.status === 'queued').length;
@@ -666,6 +674,10 @@ document.addEventListener('click', async e => {
     await api().upload_enqueue([...S.clipSel], !!S.channel); S.clipSel.clear(); await poll(); go('up'); return;
   }
   if (a === 'ytlogin') { toast('Открываю Chrome — войди в YouTube Studio'); const r = await api().yt_login(); if (r.channel) { S.channel = r.channel; renderUp(true); toast('Вход выполнен'); } else toast(r.error || 'Не вышло'); return; }
+  if (a === 'update') {
+    if (!(await confirmBox('Обновить программу?', 'Окно закроется, скачается новая версия и программа откроется снова.', 'Обновить'))) return;
+    const r = await api().update_now(); if (r && r.error) toast(r.error); return;
+  }
   if (a === 'upstart') { await api().upload_start(); return poll(); }
   if (a === 'clearup') { await api().upload_clear_done(); return poll(); }
 
@@ -828,6 +840,7 @@ async function boot() {
   await Promise.all([poll(), pollSys()]);
   go('new');
   setInterval(poll, 700); setInterval(pollSys, 4000);
+  checkUpdate(); setInterval(checkUpdate, 30 * 60 * 1000);
 }
 const BRIDGE = new URLSearchParams(location.search).get('bridge');
 if (BRIDGE && !window.pywebview) {

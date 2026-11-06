@@ -29,6 +29,9 @@ input,textarea,select,button{font:inherit;color:inherit}
 .nav .b.g{background:#2d2d3c}
 .nav .b:empty{display:none}
 .sys{margin-top:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;font-size:12px}
+.sys .upd{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(255,46,126,.16);border:1px solid rgba(255,46,126,.35);color:#fff;cursor:pointer;font-weight:600}
+.sys .upd:hover{background:rgba(255,46,126,.28)}
+.sys .ver{margin-top:8px;opacity:.6}
 .sys .t{color:var(--mute);display:flex;justify-content:space-between;gap:6px}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px;box-shadow:0 0 8px var(--green);flex:none}
 .dot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
