@@ -27,8 +27,11 @@ DEFAULT_OPTIONS = {
     "music_volume": -16.0,
     "mirror": True,
     "filters": True,
+    "cut_hardsubs": False,
+    "hardsub_band": 20,
     "subs_file": None,        # ready .ass/.srt: used instead of Whisper
-    "moments": None,          # typed timecodes [{start, end, title}]: used instead of the AI
+    "moments": None,          # typed timecodes [{start, end, title}]
+    "moments_plus_ai": True,  # True: the AI still picks its moments too; False: only the typed ones
 }
 
 
@@ -108,6 +111,7 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
 
     show, episode = parse_episode_name(video_path)
     manual_moments = opts.get("moments") or None
+    only_manual = bool(manual_moments) and not opts.get("moments_plus_ai", True)
 
     # 1. Transcribe (or take the ready subtitle file)
     print("\n--- Step 1: Transcription ---")
@@ -115,7 +119,7 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     if opts.get("subs_file"):
         print(f"Using subtitles from {opts['subs_file']} instead of Whisper")
         words_data = subtitles_to_words(opts["subs_file"])
-    elif manual_moments and not st["subs"].get("visible", True):
+    elif only_manual and not st["subs"].get("visible", True):
         print("Manual timecodes and no subtitles: skipping Whisper")
         words_data = []
     else:
@@ -128,17 +132,23 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     # 2. Analyze
     print("\n--- Step 2: AI Analysis ---")
     emit("step", {"step": 1, "progress": 0})
+    highlights = []
     if manual_moments:
-        print(f"Using {len(manual_moments)} hand-typed timecodes instead of the AI")
+        print(f"Using {len(manual_moments)} hand-typed timecodes" + (" only" if only_manual else " + AI moments"))
         highlights = [{
             "start": float(m["start"]), "end": float(m["end"]),
             "title": m.get("title") or f"{show} {episode} момент {n}".replace("  ", " ").strip(),
             "overlay": m.get("title") or "",
             "explanation": "Таймкоды вручную", "category": "manual", "score": 5,
         } for n, m in enumerate(manual_moments, 1)]
-    else:
-        highlights = find_highlights(words_data, model_name=ai_model, categories=opts["categories"],
-                                     min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"])
+    if not only_manual:
+        ai = find_highlights(words_data, model_name=ai_model, categories=opts["categories"],
+                             min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"])
+        # skip AI moments that mostly repeat a typed one
+        for h in ai or []:
+            if not any(min(h["end"], m["end"]) - max(h["start"], m["start"]) > 0.5 * (h["end"] - h["start"])
+                       for m in highlights):
+                highlights.append(h)
     emit("moments", {"moments": highlights})
     emit("step", {"step": 1, "progress": 1})
     if not highlights:
@@ -179,7 +189,8 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
         try:
             format_video(video_path, part_path, subclips, logo_path=logo_path, music_path=music_path,
                          ass_path=ass_path, logo_box=st["logo"], music_volume_db=float(opts["music_volume"]),
-                         mirror=bool(opts["mirror"]), filters=bool(opts["filters"]), cancel=cancel,
+                         mirror=bool(opts["mirror"]), filters=bool(opts["filters"]),
+                         crop_bottom=float(opts["hardsub_band"]) / 100 if opts.get("cut_hardsubs") else 0.0, cancel=cancel,
                          on_progress=_clip_progress)
             os.replace(part_path, final_output_path)
         except BaseException:

@@ -91,6 +91,8 @@ input[type=color]::-webkit-color-swatch{border:1px solid #444;border-radius:7px}
 .epx .chip i{font-style:normal;margin-left:6px;opacity:.7}.epx .chip i:hover{opacity:1;color:#ff7a7a}
 .tcbox{width:100%;min-height:170px;resize:vertical;background:var(--panel2);color:var(--text);user-select:text;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:13px/1.6 ui-monospace,Consolas,monospace;outline:none}
 .tcbox:focus{border-color:rgba(255,46,126,.5)}
+.tcai{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;user-select:none}
+.tcai input{accent-color:var(--pink);width:16px;height:16px}
 .tcerr{color:#ff8a8a;font-size:12.5px;line-height:1.5}
 .ep{display:grid;grid-template-columns:92px 1fr auto auto;gap:14px;align-items:center;padding:10px 14px;border-radius:14px;background:var(--panel2);border:1px solid var(--line)}
 .th{height:52px;border-radius:10px;position:relative;overflow:hidden;background:linear-gradient(135deg,#2b1640,#14141c);background-size:cover;background-position:center}
