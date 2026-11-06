@@ -58,7 +58,7 @@ def run_ffmpeg(stream, cancel: threading.Event | None = None, on_time=None):
 def format_video(video_path: str, output_path: str, subclips: list, logo_path: str = None, music_path: str = None,
                  ass_path: str | None = None, logo_box: dict | None = None, music_volume_db: float = -16.0,
                  mirror: bool = True, filters: bool = True, cancel: threading.Event | None = None,
-                 on_progress=None):
+                 on_progress=None, crop_bottom: float = 0.0):
     """
     Creates a 9:16 vertical clip in ONE ffmpeg pass: concatenated subclips (jump cuts), the original
     16:9 picture centred over a blurred copy, optional logo, background music and burned-in .ass
@@ -88,6 +88,10 @@ def format_video(video_path: str, output_path: str, subclips: list, logo_path: s
         base_video, audio = streams[0], streams[1]
 
     v = base_video
+    if crop_bottom > 0:
+        # subtitles burned into the episode would show up mirrored: cut that band off the source picture
+        keep = 1.0 - min(0.45, crop_bottom)
+        v = v.filter('crop', 'iw', f'trunc(ih*{keep:.3f}/2)*2', 0, 0)
     if mirror:
         v = v.filter('hflip')
     if filters:

@@ -37,7 +37,7 @@ function modal(html) {
   return new Promise(resolve => {
     $('#modalBody').innerHTML = html; $('#modal').classList.add('on');
     const inp = $('#modalBody textarea') || $('#modalBody input'); if (inp) setTimeout(() => inp.focus(), 30);
-    const done = v => { $('#modal').classList.remove('on'); resolve(v); };
+    const done = v => { const ai = $('#tcAi'); if (ai) editTimecodes._ai = ai.checked; $('#modal').classList.remove('on'); resolve(v); };
     $('#modalBody').onclick = e => {
       const b = e.target.closest('[data-m]'); if (!b) return;
       done(b.dataset.m === 'ok' ? (inp ? inp.value : true) : null);
@@ -246,6 +246,7 @@ function renderNew() {
       <div class="row" style="gap:12px"><span class="mute small" style="white-space:nowrap">Громкость</span><input type="range" min="-40" max="0" step="1" value="${st.music_volume}" data-num="music_volume"><span class="small" id="vVol" style="white-space:nowrap">${st.music_volume} дБ</span></div>
       <div class="row"><span>Вырезать тишину <span class="mute small">&gt; ${st.silence_gap} сек</span></span><div class="tg ${st.remove_silence ? 'on' : ''}" data-tg="remove_silence"></div></div>
       <div class="row"><span>Зеркалить кадр <span class="mute small">против копирайта</span></span><div class="tg ${st.mirror ? 'on' : ''}" data-tg="mirror"></div></div>
+      <div class="row"><span>Срезать вшитые сабы <span class="mute small">низ кадра ${st.hardsub_band}%</span></span><div class="tg ${st.cut_hardsubs ? 'on' : ''}" data-tg="cut_hardsubs"></div></div>
       <div class="row"><span>Цвет, зерно, виньетка</span><div class="tg ${st.filters ? 'on' : ''}" data-tg="filters"></div></div>
       <div class="row"><span>Нейросеть</span><select data-set="ollama_model" style="min-width:0;max-width:190px">${models.map(m => `<option value="${esc(m)}" ${m === st.ollama_model ? 'selected' : ''}>${esc(m)}${installed.length && !installed.includes(m) ? ' (не скачана)' : ''}</option>`).join('')}</select></div>
       <div class="row"><span>Папка для клипов</span><span class="btn sm" data-act="outdir" title="${esc(st.out_dir)}" style="max-width:190px;overflow:hidden;text-overflow:ellipsis">📁 ${esc(st.out_dir.split(/[\\/]/).pop() || st.out_dir)}</span></div>
@@ -268,7 +269,7 @@ function renderQueue() {
           <span class="chip ${j.subs_file ? 'on' : ''}" data-subs="${j.id}" title="${j.subs_file ? esc(j.subs_file) : 'Готовые .ass / .srt вместо распознавания речи'}">💬 ${j.subs_file ? esc(j.subs_file.split(/[\\/]/).pop()) : 'Свои субтитры'}${j.subs_file ? `<i data-nosubs="${j.id}" title="Убрать, распознать речь">×</i>` : ''}</span>
           <span class="chip ${j.manual.length ? 'on' : ''}" data-tc="${j.id}" title="Свои моменты вместо выбора нейросетью">⏱ ${j.manual.length ? `Таймкоды: ${j.manual.length}` : 'Таймкоды вручную'}</span>
         </div></div>
-      <span class="chip">${j.manual.length ? `${j.manual.length} ${plural(j.manual.length, 'клип', 'клипа', 'клипов')}` : `до ${S.settings.max_clips} клипов`}</span><span class="x" data-rm="${j.id}" title="Убрать">×</span></div>`).join('')
+      <span class="chip">${j.manual.length && !j.manual_plus_ai ? `${j.manual.length} ${plural(j.manual.length, 'клип', 'клипа', 'клипов')}` : j.manual.length ? `${j.manual.length} + до ${S.settings.max_clips} клипов` : `до ${S.settings.max_clips} клипов`}</span><span class="x" data-rm="${j.id}" title="Убрать">×</span></div>`).join('')
     : `<div class="empty" style="padding:20px"><div>Очередь пустая. Добавь серии кнопкой или перетаскиванием.</div></div>`;
   const b = $('#startBtn');
   if (b) {
@@ -279,20 +280,21 @@ function renderQueue() {
 
 async function editTimecodes(id) {
   const j = S.prog.jobs.find(x => x.id === id); if (!j) return;
-  let text = j.timecodes || '', errors = [];
+  let text = j.timecodes || '', errors = [], plusAi = j.manual.length ? j.manual_plus_ai : true;
   for (;;) {
     const v = await modal(`<b style="font-size:16px">Таймкоды · ${esc(epName(j))}</b>
-      <div class="mute small">Один клип на строку: <b>начало - конец</b> и, если хочешь, название. Нейросеть тогда не выбирает моменты, режутся ровно эти куски. Пусто — выбирает нейросеть.</div>
+      <div class="mute small">Один клип на строку: <b>начало - конец</b> и, если хочешь, название.</div>
       <textarea class="tcbox" spellcheck="false" placeholder="12:30 - 13:15 Годжо всех разносит&#10;18:02 - 18:40&#10;1:02:10 - 1:02:55 Финал">${esc(text)}</textarea>
+      <label class="tcai"><input type="checkbox" id="tcAi" ${plusAi ? 'checked' : ''}> Нейросеть тоже ищет моменты в серии <span class="mute small">(выключи — будут только эти куски)</span></label>
       ${errors.length ? `<div class="tcerr">${errors.map(esc).join('<br>')}</div>` : ''}
       <div style="display:flex;gap:10px;justify-content:space-between;align-items:center"><span class="mute small">${j.duration ? 'Серия ' + fmtT(j.duration) + ' · ' : ''}Ctrl+Enter — сохранить</span>
       <span style="display:flex;gap:10px"><button class="btn" data-m="no">Отмена</button><button class="btn p" data-m="ok">Сохранить</button></span></div>`);
     if (v === null || v === true) return;
-    text = v;
-    const r = await api().job_set_timecodes(id, text);
+    text = v; plusAi = editTimecodes._ai;
+    const r = await api().job_set_timecodes(id, text, plusAi);
     if (r && r.errors) { errors = r.errors; continue; }
     if (r && r.error) { toast(r.error); return; }
-    toast(r.count ? `${r.count} ${plural(r.count, 'момент', 'момента', 'моментов')} вручную` : 'Моменты выберет нейросеть');
+    toast(r.count ? `${r.count} ${plural(r.count, 'момент', 'момента', 'моментов')} вручную${plusAi ? ' + нейросеть' : ''}` : 'Моменты выберет нейросеть');
     return;
   }
 }
@@ -614,6 +616,7 @@ function renderSettings() {
       <div class="row"><span>Видеокарта</span><span class="${g ? '' : 'mute'}">${g ? esc(g.name) + ` · ${g.total.toFixed(0)} ГБ` : 'не найдена (будет медленно на процессоре)'}</span></div>
       <div class="row"><span>Распознавание речи</span><select data-set="whisper_model">${[['large-v3', 'large-v3 · точнее (6+ ГБ)'], ['medium', 'medium · быстрее'], ['small', 'small · для слабых ПК']].map(([v, l]) => `<option value="${v}" ${v === st.whisper_model ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="row"><span>Ollama</span><span>${o.ok ? `<span class="dot"></span>работает · ${(o.models || []).length} моделей` : '<span class="dot off"></span>не запущена — открой Ollama'}</span></div>
+      <div class="row"><span>Срез вшитых сабов <span class="mute small">сколько отрезать снизу</span></span><div style="display:flex;gap:10px;align-items:center;width:200px"><input type="range" min="8" max="35" step="1" value="${st.hardsub_band}" data-num="hardsub_band"><b id="vBand" class="small" style="width:46px">${st.hardsub_band}%</b></div></div>
       <div class="row"><span>Порог тишины</span><div style="display:flex;gap:10px;align-items:center;width:200px"><input type="range" min="0.8" max="5" step="0.1" value="${st.silence_gap}" data-num="silence_gap"><b id="vGap" class="small" style="width:46px">${st.silence_gap} с</b></div></div>
     </div>
   </div>
@@ -762,9 +765,10 @@ document.addEventListener('input', e => {
     const out = { clip_min: '#vMin', clip_max: '#vMax', max_clips: '#vCnt', music_volume: '#vVol', silence_gap: '#vGap' };
     if ($('#vMin')) $('#vMin').textContent = S.settings.clip_min + ' сек';
     if ($('#vMax')) $('#vMax').textContent = S.settings.clip_max + ' сек';
-    if (k === 'max_clips') { $('#vCnt').textContent = 'до ' + v; $$('.ep .chip').forEach(c => c.textContent = `до ${v} клипов`); }
+    if (k === 'max_clips') { $('#vCnt').textContent = 'до ' + v; $$('.ep > .chip').forEach(c => { if (/^до /.test(c.textContent)) c.textContent = `до ${v} клипов`; }); }
     if (k === 'music_volume') $(out[k]).textContent = v + ' дБ';
     if (k === 'silence_gap') $(out[k]).textContent = v + ' с';
+    if (k === 'hardsub_band' && $('#vBand')) $('#vBand').textContent = v + '%';
     return save();
   }
   if (t.dataset.sty) {
@@ -801,7 +805,7 @@ async function poll() {
     if (p.log.length) { S.log.push(...p.log); S.log = S.log.slice(-300); S.logSeq = p.log[p.log.length - 1].seq; }
     const doneClips = p.jobs.reduce((a, j) => a + (j.clips || 0), 0);
     if (doneClips !== S.clipsDone) { if (S.clipsDone >= 0 || !S.clips.length) loadClips(); S.clipsDone = doneClips; }
-    const sig = JSON.stringify(p.jobs.map(j => [j.id, j.status, !!j.thumb, j.duration, j.subs_file, j.manual.length]));
+    const sig = JSON.stringify(p.jobs.map(j => [j.id, j.status, !!j.thumb, j.duration, j.subs_file, j.manual.length, j.manual_plus_ai]));
     if (sig !== lastJobsSig) { if (S.screen === 'new') renderQueue(); refreshPreviews(); }
     lastJobsSig = sig;
     if (S.screen === 'run') renderRun();

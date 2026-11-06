@@ -110,6 +110,8 @@ DEFAULT_SETTINGS = {
     "music_volume": -16.0,
     "mirror": True,
     "filters": True,
+    "cut_hardsubs": False,    # episode has subtitles burned into the picture: cut the bottom band
+    "hardsub_band": 20,       # % of the frame height
     "preset": "АниБаза",
     "style": copy.deepcopy(style_mod.DEFAULT_STYLE),
     "upload": {
@@ -242,7 +244,7 @@ class Jobs:
                     "percent": 0.0, "moments": [], "clip_index": -1, "words": 0, "error": "",
                     "started": None, "finished": None, "clips": 0,
                     # hand-made input: ready subtitles instead of Whisper, typed timecodes instead of the AI
-                    "subs_file": find_subtitles_for(p), "timecodes": "", "manual": [],
+                    "subs_file": find_subtitles_for(p), "timecodes": "", "manual": [], "manual_plus_ai": True,
                 }
                 self.items.append(job)
                 added.append(job)
@@ -355,6 +357,7 @@ class Jobs:
         options = {k: s.get(k, v) for k, v in DEFAULT_OPTIONS.items()}
         options["subs_file"] = job.get("subs_file") if job.get("subs_file") and os.path.isfile(job["subs_file"]) else None
         options["moments"] = job.get("manual") or None
+        options["moments_plus_ai"] = bool(job.get("manual_plus_ai", True))
         try:
             process_video(job["path"], s["out_dir"], music_path=music_path, remove_silence=bool(s["remove_silence"]),
                           ai_model=s["ollama_model"], style=s["style"], options=options, on_event=on_event,
@@ -656,7 +659,7 @@ class Api:
         if job:
             job["subs_file"] = None
 
-    def job_set_timecodes(self, job_id, text):
+    def job_set_timecodes(self, job_id, text, plus_ai=True):
         job = self._job(job_id)
         if not job:
             return {"error": "Серия уже в работе"}
@@ -665,6 +668,7 @@ class Api:
             return {"errors": errors}
         job["timecodes"] = (text or "").strip()
         job["manual"] = moments
+        job["manual_plus_ai"] = bool(plus_ai)
         return {"count": len(moments)}
 
     # --- processing
