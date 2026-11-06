@@ -8,7 +8,7 @@ import time
 
 from dotenv import load_dotenv
 
-from analyzer import find_highlights
+from analyzer import clean_words, find_highlights
 from manual import subtitles_to_words
 from style import APP_DIR, normalize_style, resolve_logo
 from subtitles import generate_ass_subtitles
@@ -132,6 +132,9 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     # 2. Analyze
     print("\n--- Step 2: AI Analysis ---")
     emit("step", {"step": 1, "progress": 0})
+    if not only_manual and not opts.get("subs_file"):
+        words_data = clean_words(words_data)  # drop Whisper junk («Субтитры сделал…») from subtitles too
+    report = os.path.join(APP_DIR, "_tmp", "analysis_" + re.sub(r"[^\w\-]+", "_", f"{show}_{episode}")[:80] + ".json")
     highlights = []
     if manual_moments:
         print(f"Using {len(manual_moments)} hand-typed timecodes" + (" only" if only_manual else " + AI moments"))
@@ -143,7 +146,9 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
         } for n, m in enumerate(manual_moments, 1)]
     if not only_manual:
         ai = find_highlights(words_data, model_name=ai_model, categories=opts["categories"],
-                             min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"])
+                             min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"],
+                             video_path=video_path, report_path=report, cancel=cancel,
+                             on_progress=lambda p: emit("step", {"step": 1, "progress": p}))
         # skip AI moments that mostly repeat a typed one
         for h in ai or []:
             if not any(min(h["end"], m["end"]) - max(h["start"], m["start"]) > 0.5 * (h["end"] - h["start"])
