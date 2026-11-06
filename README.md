@@ -42,6 +42,8 @@ Subtitle fonts are bundled in `Assets/Fonts` (Montserrat Black, Russo One, Rubik
 
 ## Usage
 
+**Auto-update:** `run_tiktok_ai.bat` checks GitHub on every start and downloads the newest version of the program files (venv, settings, clips, logins and your own fonts/logos/music stay as they are; new libraries are installed when `requirements.txt` changes). While the window is open, the sidebar shows «Есть обновление» when a newer version is out. Set `ANIBAZA_NO_UPDATE=1` to turn it off; a git checkout is never auto-updated.
+
 **Method 1 (TikTok Studio window):**
 Launch `run_tiktok_ai.bat`. The window has six sections:
 - **Новая нарезка** — drop episodes (or pick files), choose what the AI should look for, clip length, how many clips per episode, music, silence cutting, anti-copyright filters, the Ollama model and the output folder.

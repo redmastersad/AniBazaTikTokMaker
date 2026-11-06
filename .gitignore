@@ -30,6 +30,9 @@ _tmp/
 _webview/
 *.part
 
+version.txt
+*.upd
+
 # TikTok API keys and login
 tiktok_config.json
 tiktok_token.json
