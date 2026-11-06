@@ -15,7 +15,8 @@ def _launch(p, headless: bool):
     if headless:
         args += ["--headless=new", "--window-size=1920,1080", "--mute-audio"]
     return p.chromium.launch_persistent_context(
-        user_data_dir=USER_DATA_DIR, headless=False, channel="chrome", args=args)
+        user_data_dir=USER_DATA_DIR, headless=False, channel="chrome", args=args,
+        chromium_sandbox=True)  # without it Playwright adds --no-sandbox and Chrome shows a warning bar
 
 
 def channel_name() -> str | None:

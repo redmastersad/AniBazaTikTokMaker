@@ -91,6 +91,7 @@ from analyzer import CATEGORIES, DEFAULT_CATEGORIES  # noqa: E402
 from main import (DEFAULT_OPTIONS, parse_episode_name, process_video,  # noqa: E402
                   read_clips_index, write_clips_index)
 from video_editor import Cancelled, grab_frame, probe_duration  # noqa: E402
+from manual import SUBS_EXT, find_subtitles_for, parse_timecodes, subtitles_to_words  # noqa: E402
 
 VIDEO_EXT = (".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v")
 AUDIO_EXT = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac")
@@ -228,6 +229,8 @@ class Jobs:
         added = []
         with self.lock:
             known = {j["path"] for j in self.items if j["status"] in ("queued", "running")}
+            subs = [p for p in paths if p and os.path.isfile(p) and p.lower().endswith(SUBS_EXT)]
+            paths = [p for p in paths if p not in subs]
             for p in paths:
                 if not p or not os.path.isfile(p) or not p.lower().endswith(VIDEO_EXT) or p in known:
                     continue
@@ -238,12 +241,32 @@ class Jobs:
                     "thumb": None, "status": "queued", "step": -1, "step_progress": 0.0,
                     "percent": 0.0, "moments": [], "clip_index": -1, "words": 0, "error": "",
                     "started": None, "finished": None, "clips": 0,
+                    # hand-made input: ready subtitles instead of Whisper, typed timecodes instead of the AI
+                    "subs_file": find_subtitles_for(p), "timecodes": "", "manual": [],
                 }
                 self.items.append(job)
                 added.append(job)
+            self._attach_subs(subs)
         for job in added:
             threading.Thread(target=self._probe, args=(job,), daemon=True).start()
         return len(added)
+
+    def _attach_subs(self, subs):
+        """Dropped subtitle files go to the queued episode with the same name (or the only one waiting)."""
+        queued = [j for j in self.items if j["status"] == "queued"]
+        for sp in subs:
+            stem = os.path.splitext(os.path.basename(sp))[0].lower()
+            job = next((j for j in queued if os.path.splitext(j["file"])[0].lower() == stem), None)
+            if job is None:
+                show, ep = parse_episode_name(sp)
+                job = next((j for j in queued if ep and (j["show"], j["episode"]) == (show, ep)), None)
+            if job is None and len(queued) == 1:
+                job = queued[0]
+            if job is not None:
+                job["subs_file"] = sp
+                print(f"Субтитры {os.path.basename(sp)} -> {job['file']}")
+            else:
+                print(f"Не понял, к какой серии субтитры {os.path.basename(sp)}: нажми «Свои субтитры» у нужной серии")
 
     def _probe(self, job):
         job["duration"] = probe_duration(job["path"])
@@ -330,6 +353,8 @@ class Jobs:
             if not os.path.exists(music_path):
                 music_path = None
         options = {k: s.get(k, v) for k, v in DEFAULT_OPTIONS.items()}
+        options["subs_file"] = job.get("subs_file") if job.get("subs_file") and os.path.isfile(job["subs_file"]) else None
+        options["moments"] = job.get("manual") or None
         try:
             process_video(job["path"], s["out_dir"], music_path=music_path, remove_silence=bool(s["remove_silence"]),
                           ai_model=s["ollama_model"], style=s["style"], options=options, on_event=on_event,
@@ -607,6 +632,40 @@ class Api:
         except Exception as e:
             return {"error": str(e)}
         return {"fonts": style_mod.list_fonts(), "name": info["name"]}
+
+    # --- hand-made input per episode
+    def _job(self, job_id):
+        return next((j for j in self._jobs.items if j["id"] == job_id and j["status"] == "queued"), None)
+
+    def job_pick_subs(self, job_id):
+        job = self._job(job_id)
+        if not job:
+            return {"error": "Серия уже в работе"}
+        res = self._dialog("open", ("Субтитры (*.ass;*.ssa;*.srt;*.vtt)", "Все файлы (*.*)"))
+        if not res:
+            return None
+        try:
+            words = subtitles_to_words(res[0])
+        except Exception as e:
+            return {"error": f"Не получилось прочитать субтитры: {e}"}
+        job["subs_file"] = res[0]
+        return {"file": os.path.basename(res[0]), "words": len(words)}
+
+    def job_clear_subs(self, job_id):
+        job = self._job(job_id)
+        if job:
+            job["subs_file"] = None
+
+    def job_set_timecodes(self, job_id, text):
+        job = self._job(job_id)
+        if not job:
+            return {"error": "Серия уже в работе"}
+        moments, errors = parse_timecodes(text or "", job.get("duration") or 0)
+        if errors:
+            return {"errors": errors}
+        job["timecodes"] = (text or "").strip()
+        job["manual"] = moments
+        return {"count": len(moments)}
 
     # --- processing
     def queue_remove(self, job_id):
