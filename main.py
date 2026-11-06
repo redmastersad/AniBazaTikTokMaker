@@ -9,6 +9,7 @@ import time
 from dotenv import load_dotenv
 
 from analyzer import find_highlights
+from manual import subtitles_to_words
 from style import APP_DIR, normalize_style, resolve_logo
 from subtitles import generate_ass_subtitles
 from transcriber import transcribe_video
@@ -26,6 +27,8 @@ DEFAULT_OPTIONS = {
     "music_volume": -16.0,
     "mirror": True,
     "filters": True,
+    "subs_file": None,        # ready .ass/.srt: used instead of Whisper
+    "moments": None,          # typed timecodes [{start, end, title}]: used instead of the AI
 }
 
 
@@ -103,20 +106,39 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     print(f"        PROCESSING: {os.path.basename(video_path)}       ")
     print("=======================================================\n")
 
-    # 1. Transcribe
+    show, episode = parse_episode_name(video_path)
+    manual_moments = opts.get("moments") or None
+
+    # 1. Transcribe (or take the ready subtitle file)
     print("\n--- Step 1: Transcription ---")
     emit("step", {"step": 0, "progress": 0})
-    _, words_data = transcribe_video(
-        video_path, model_size=opts["whisper_model"],
-        on_progress=lambda p: emit("step", {"step": 0, "progress": p}), cancel=cancel)
+    if opts.get("subs_file"):
+        print(f"Using subtitles from {opts['subs_file']} instead of Whisper")
+        words_data = subtitles_to_words(opts["subs_file"])
+    elif manual_moments and not st["subs"].get("visible", True):
+        print("Manual timecodes and no subtitles: skipping Whisper")
+        words_data = []
+    else:
+        _, words_data = transcribe_video(
+            video_path, model_size=opts["whisper_model"],
+            on_progress=lambda p: emit("step", {"step": 0, "progress": p}), cancel=cancel)
     emit("step", {"step": 0, "progress": 1, "words": len(words_data)})
     _wait_if_paused(pause, cancel)
 
     # 2. Analyze
     print("\n--- Step 2: AI Analysis ---")
     emit("step", {"step": 1, "progress": 0})
-    highlights = find_highlights(words_data, model_name=ai_model, categories=opts["categories"],
-                                 min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"])
+    if manual_moments:
+        print(f"Using {len(manual_moments)} hand-typed timecodes instead of the AI")
+        highlights = [{
+            "start": float(m["start"]), "end": float(m["end"]),
+            "title": m.get("title") or f"{show} {episode} момент {n}".replace("  ", " ").strip(),
+            "overlay": m.get("title") or "",
+            "explanation": "Таймкоды вручную", "category": "manual", "score": 5,
+        } for n, m in enumerate(manual_moments, 1)]
+    else:
+        highlights = find_highlights(words_data, model_name=ai_model, categories=opts["categories"],
+                                     min_len=opts["clip_min"], max_len=opts["clip_max"], max_clips=opts["max_clips"])
     emit("moments", {"moments": highlights})
     emit("step", {"step": 1, "progress": 1})
     if not highlights:
@@ -127,7 +149,6 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
     os.makedirs(output_dir, exist_ok=True)
     tmp_dir = os.path.join(APP_DIR, "_tmp")
     os.makedirs(tmp_dir, exist_ok=True)
-    show, episode = parse_episode_name(video_path)
     generated_files = []
 
     # 3. Montage + subtitles (one ffmpeg pass per clip)
@@ -148,7 +169,7 @@ def process_video(video_path: str, output_dir: str, logo_path: str = None, music
         ass_path = os.path.join(tmp_dir, f"subs_{os.getpid()}_{i}.ass")
         subclips = get_subclips(words_data, h['start'], h['end'], max_silence=float(opts["silence_gap"]),
                                 remove_silence=remove_silence)
-        generate_ass_subtitles(words_data, ass_path, subclips, style=st, title=h['title'])
+        generate_ass_subtitles(words_data, ass_path, subclips, style=st, title=h.get('overlay', h['title']))
 
         def _clip_progress(p, i=i):
             emit("clip_progress", {"index": i, "progress": p})

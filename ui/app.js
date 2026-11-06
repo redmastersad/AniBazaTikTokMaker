@@ -36,13 +36,16 @@ function toast(msg) {
 function modal(html) {
   return new Promise(resolve => {
     $('#modalBody').innerHTML = html; $('#modal').classList.add('on');
-    const inp = $('#modalBody input'); if (inp) setTimeout(() => inp.focus(), 30);
+    const inp = $('#modalBody textarea') || $('#modalBody input'); if (inp) setTimeout(() => inp.focus(), 30);
     const done = v => { $('#modal').classList.remove('on'); resolve(v); };
     $('#modalBody').onclick = e => {
       const b = e.target.closest('[data-m]'); if (!b) return;
       done(b.dataset.m === 'ok' ? (inp ? inp.value : true) : null);
     };
-    $('#modalBody').onkeydown = e => { if (e.key === 'Enter') done(inp ? inp.value : true); if (e.key === 'Escape') done(null); };
+    $('#modalBody').onkeydown = e => {
+      if (e.key === 'Enter' && (e.target.tagName !== 'TEXTAREA' || e.ctrlKey)) done(inp ? inp.value : true);
+      if (e.key === 'Escape') done(null);
+    };
   });
 }
 const confirmBox = (title, text, ok = 'Да') => modal(`<b style="font-size:16px">${esc(title)}</b><div class="mute">${esc(text)}</div>
@@ -260,13 +263,37 @@ function renderQueue() {
   $('#qInfo').innerHTML = jobs.length ? `<span>В очереди: ${jobs.length} ${plural(jobs.length, 'серия', 'серии', 'серий')} · ${fmtT(dur)} видео</span><span>${S.prog.running ? 'идёт обработка' : ''}</span>` : '';
   box.innerHTML = jobs.length ? jobs.map(j => `
     <div class="ep"><div class="th" style="${j.thumb ? `background-image:url(${j.thumb})` : ''}"><b>${j.duration ? fmtT(j.duration) : '…'}</b></div>
-      <div style="min-width:0"><b>${esc(epName(j))}</b><div class="mute small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.path)} · ${fmtSize(j.size)}</div></div>
-      <span class="chip">до ${S.settings.max_clips} клипов</span><span class="x" data-rm="${j.id}" title="Убрать">×</span></div>`).join('')
+      <div style="min-width:0"><b>${esc(epName(j))}</b><div class="mute small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(j.path)} · ${fmtSize(j.size)}</div>
+        <div class="epx">
+          <span class="chip ${j.subs_file ? 'on' : ''}" data-subs="${j.id}" title="${j.subs_file ? esc(j.subs_file) : 'Готовые .ass / .srt вместо распознавания речи'}">💬 ${j.subs_file ? esc(j.subs_file.split(/[\\/]/).pop()) : 'Свои субтитры'}${j.subs_file ? `<i data-nosubs="${j.id}" title="Убрать, распознать речь">×</i>` : ''}</span>
+          <span class="chip ${j.manual.length ? 'on' : ''}" data-tc="${j.id}" title="Свои моменты вместо выбора нейросетью">⏱ ${j.manual.length ? `Таймкоды: ${j.manual.length}` : 'Таймкоды вручную'}</span>
+        </div></div>
+      <span class="chip">${j.manual.length ? `${j.manual.length} ${plural(j.manual.length, 'клип', 'клипа', 'клипов')}` : `до ${S.settings.max_clips} клипов`}</span><span class="x" data-rm="${j.id}" title="Убрать">×</span></div>`).join('')
     : `<div class="empty" style="padding:20px"><div>Очередь пустая. Добавь серии кнопкой или перетаскиванием.</div></div>`;
   const b = $('#startBtn');
   if (b) {
     b.disabled = !jobs.length;
     b.textContent = S.prog.running ? (jobs.length ? `✦ Добавить ${jobs.length} в обработку` : 'Идёт обработка…') : jobs.length ? `✦ Нарезать ${jobs.length} ${plural(jobs.length, 'серию', 'серии', 'серий')}` : '✦ Нарезать';
+  }
+}
+
+async function editTimecodes(id) {
+  const j = S.prog.jobs.find(x => x.id === id); if (!j) return;
+  let text = j.timecodes || '', errors = [];
+  for (;;) {
+    const v = await modal(`<b style="font-size:16px">Таймкоды · ${esc(epName(j))}</b>
+      <div class="mute small">Один клип на строку: <b>начало - конец</b> и, если хочешь, название. Нейросеть тогда не выбирает моменты, режутся ровно эти куски. Пусто — выбирает нейросеть.</div>
+      <textarea class="tcbox" spellcheck="false" placeholder="12:30 - 13:15 Годжо всех разносит&#10;18:02 - 18:40&#10;1:02:10 - 1:02:55 Финал">${esc(text)}</textarea>
+      ${errors.length ? `<div class="tcerr">${errors.map(esc).join('<br>')}</div>` : ''}
+      <div style="display:flex;gap:10px;justify-content:space-between;align-items:center"><span class="mute small">${j.duration ? 'Серия ' + fmtT(j.duration) + ' · ' : ''}Ctrl+Enter — сохранить</span>
+      <span style="display:flex;gap:10px"><button class="btn" data-m="no">Отмена</button><button class="btn p" data-m="ok">Сохранить</button></span></div>`);
+    if (v === null || v === true) return;
+    text = v;
+    const r = await api().job_set_timecodes(id, text);
+    if (r && r.errors) { errors = r.errors; continue; }
+    if (r && r.error) { toast(r.error); return; }
+    toast(r.count ? `${r.count} ${plural(r.count, 'момент', 'момента', 'моментов')} вручную` : 'Моменты выберет нейросеть');
+    return;
   }
 }
 
@@ -641,6 +668,13 @@ document.addEventListener('click', async e => {
 
   let el;
   if ((el = t.closest('[data-rm]'))) { await api().queue_remove(el.dataset.rm); return poll(); }
+  if ((el = t.closest('[data-nosubs]'))) { await api().job_clear_subs(el.dataset.nosubs); lastJobsSig = ''; return poll(); }
+  if ((el = t.closest('[data-subs]'))) {
+    const r = await api().job_pick_subs(el.dataset.subs);
+    if (r && r.error) toast(r.error); else if (r) toast(`Субтитры: ${r.file} · ${r.words} слов`);
+    lastJobsSig = ''; return poll();
+  }
+  if ((el = t.closest('[data-tc]'))) { await editTimecodes(el.dataset.tc); lastJobsSig = ''; return poll(); }
   if ((el = t.closest('[data-cat]'))) {
     const c = el.dataset.cat, cats = S.settings.categories;
     S.settings.categories = cats.includes(c) ? cats.filter(x => x !== c) : [...cats, c];
@@ -767,7 +801,7 @@ async function poll() {
     if (p.log.length) { S.log.push(...p.log); S.log = S.log.slice(-300); S.logSeq = p.log[p.log.length - 1].seq; }
     const doneClips = p.jobs.reduce((a, j) => a + (j.clips || 0), 0);
     if (doneClips !== S.clipsDone) { if (S.clipsDone >= 0 || !S.clips.length) loadClips(); S.clipsDone = doneClips; }
-    const sig = JSON.stringify(p.jobs.map(j => [j.id, j.status, !!j.thumb, j.duration]));
+    const sig = JSON.stringify(p.jobs.map(j => [j.id, j.status, !!j.thumb, j.duration, j.subs_file, j.manual.length]));
     if (sig !== lastJobsSig) { if (S.screen === 'new') renderQueue(); refreshPreviews(); }
     lastJobsSig = sig;
     if (S.screen === 'run') renderRun();

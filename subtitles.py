@@ -32,6 +32,7 @@ def _clip_words(words_data, subclips):
                         'word': w['word'].strip(),
                         'start': current_relative_time + (w_start - start),
                         'end': current_relative_time + (w_end - start),
+                        'brk': bool(w.get('brk')),  # last word of a line from a subtitle file
                     })
         current_relative_time += (end - start)
     return clip_words, current_relative_time
@@ -47,7 +48,7 @@ def _phrases(clip_words, max_words):
             phrases.append(phrase)
             phrase = []
         phrase.append(w)
-        if len(phrase) >= max_words or w['word'].endswith(('.', '!', '?')):
+        if len(phrase) >= max_words or w.get('brk') or w['word'].endswith(('.', '!', '?')):
             phrases.append(phrase)
             phrase = []
     if phrase:
